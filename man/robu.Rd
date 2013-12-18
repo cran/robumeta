@@ -135,7 +135,7 @@ robu(formula, data, studynum, var.eff.size, userweights, modelweights =
 # Load data
 data(hierdat)
 
-### Small-Sample Corrections - Hierarchical Dependence Model
+# Small-Sample Corrections - Hierarchical Dependence Model
 HierModSm <-  robu(formula = effectsize ~ binge + followup + sreport
                    + age, data = hierdat, studynum = studyid, 
                    var.eff.size = var, modelweights = "HIER", small = TRUE)

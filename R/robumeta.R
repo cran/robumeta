@@ -1,14 +1,262 @@
+forest.robu <- function(x, es.lab, study.lab, ...){
+  if(paste(x$ml[3]) != 1)  
+      stop("Requires an intercept-only model.")
+  output        <- x$output
+  dat           <- as.data.frame(x$data)
+  data.full     <- as.data.frame(x$data.full)
+  dat$weights   <- data.full$r.weights
+  dat$r.weights <- data.full$r.weights
+  dat$es        <- data.full$effect.size
+  dat$var       <- data.full$var.eff.size
+  dat           <- droplevels(dat)
+  elipses       <- list(...) 
+  extracols     <- length(elipses)
+
+  # prepare additional columns
+  
+  if (extracols > 0){
+  add.col.lab <- c()
+  add.col.title <- c()
+  
+  
+  for (i in 1:extracols) {
+    if(is.numeric(dat[,elipses[[i]]]))
+      dat[,elipses[[i]]] <- format(dat[,elipses[[i]]], 
+                                   digits = 3, justify = "left")
+    
+    add.col.lab[[i]]   <- dat[,elipses[[i]]]
+    add.col.lab[[i] ]  <- as.character(add.col.lab[[i]])
+    add.col.title[[i]] <- names(elipses[i])
+  }
+  }
+  grand.ES      <- x$robust.coefficients
+  grand.CI.L    <- x$CI.L
+  grand.CI.U    <- x$CI.U
+  dat$study.num <- data.full$study
+  dat$es.num    <- ave(dat$study.num, dat$study.num, FUN = seq_along)
+  dat$es.lab    <- dat[,es.lab]
+  dat$es.lab    <- as.character(dat$es.lab)
+  dat$study.lab <- dat[,study.lab]
+  total.rows    <- length(dat$study.num) + 2*max(dat$study.num) + 2
+  total.studies <- max(dat$study.num)
+
+  # Effect size rows and labels
+  es.rows <-  c()
+  textcol.labels <- c()
+
+  for(i in 1:total.studies) {
+    w       <- which(dat$study.num == i)
+    temp    <- (2*i) + w
+    es.rows <- c(es.rows, temp)
+  }
+
+  for (i in 1:length(dat$study.num)) {
+    textcol.labels[[i]] <- textGrob(paste(dat[i,]$es.lab), 
+                                    x = 0, 
+                                    just = "left")
+  }
+
+  labels  <- list(labels = textcol.labels)
+  rows    <- list(rows = es.rows )
+  textcol <- c(labels, rows)
+
+  # Additional Columns
+  
+  add.col <- c()
+  extra.cols <- list()
+  add.rows <- c(es.rows, (min(es.rows)-1))
+  j.pos <- (length(dat$study.num)+1)
+  
+  if (extracols > 0){
+  
+  for (i in 1:extracols) {
+    extra.cols[[i]] <- list()
+    
+    for (j in 1:length(dat$study.num)) {
+      extra.cols[[i]][[j]] <- list()
+      extra.cols[[i]][[j]] <- textGrob(paste(add.col.lab[[i]][j]), 
+                                    x = 0, 
+                                    just = "left")
+    }
+
+    extra.cols[[i]][[j.pos]] <- textGrob(paste(add.col.title[[i]]), 
+                                  x=0, 
+                                  just="left", 
+                                  gp=gpar(fontface="bold"))
+    
+    labels       <- list(labels = extra.cols[[i]])
+    rows         <- list(rows = add.rows )
+    add.col[[i]] <- c(labels, rows)
+  }
+  }
+
+  # Study rows and labels
+  study.rows   <- c()
+  study.labels <- c()
+  total.label  <- c()
+
+  for(i in 1:total.studies) {
+    w          <- which(dat$study.num == i)
+    temp       <- min((2*i + w)) - 1
+    study.rows <- c(study.rows, temp)
+  }
+
+  study.rows <- c(study.rows, max(total.rows))
+  orig.study.rows <- which(dat$es.num == 1)
+
+  for (i in 1:length(orig.study.rows)) {
+    study.labels[[i]] <- textGrob(paste(dat[(orig.study.rows[i]),]$study.lab), 
+                                  x=0, 
+                                  just="left", 
+                                  gp=gpar(fontface="bold"))
+  }
+
+  study.labels[[length(orig.study.rows)+1]] <- textGrob(paste("Total"), 
+                                                        x = 0, 
+                                                        just = "left", 
+                                                        gp = gpar(fontface = 
+                                                                    "bold"))
+  textcol$labels <- c(textcol$labels, study.labels)
+  textcol$rows   <- c(textcol$rows, study.rows)
+
+  # Data column
+
+  type          <- c()
+  effect.size   <- c()
+  size          <- c()
+  CI.L          <- c()
+  CI.U          <- c()
+
+  for (i in 1:length(dat$study.num)) {
+    effect.size[[i]] <- dat[i,]$es
+    CI.U[[i]] <- dat[i,]$es + (1.96*sqrt(dat[i,]$var))
+    CI.L[[i]] <- dat[i,]$es - (1.96*sqrt(dat[i,]$var))
+    size[[i]] <- dat[i,]$weights 
+    type[[i]] <- "n"
+  }
+
+  type  <- c(type, "s")
+  rows  <- c(es.rows, max(es.rows)+2)
+  size  <- size/max(size)
+  ES    <- c(effect.size, grand.ES)
+  CI.L  <- c(CI.L, grand.CI.L)
+  CI.U  <- c(CI.U, grand.CI.U)
+
+  datacol       <- list(type = type, rows = rows, size = size, CI.L = CI.L, 
+                        CI.U = CI.U, ES = ES)
+  datacolwidth  <- unit(3, "inches")
+  min           <- floor(as.numeric(min(datacol$CI.L)))
+  max           <- ceiling(as.numeric(max(datacol$CI.U)))
+  datacol$range <- c(min, max)
+
+  # Draw Label Column
+  drawLabelCol <- function(col, j) {
+    for (i in 1:length(col$rows)) {
+      pushViewport(viewport(layout.pos.row=col$rows[i], layout.pos.col=j))
+      grid.draw(col$labels[[i]])
+      popViewport()
+    }
+  }
+
+  # Draw Confidence Intervals
+  drawNormalCI <- function(CI.L, ES, CI.U, size) {
+    grid.rect(x=unit(ES, "native"),
+              width=unit(size, "snpc"), height=unit(size, "snpc"),
+              gp=gpar(fill="black"))
+
+    if (convertX(unit(CI.U, "native"), "npc", valueOnly=TRUE) > 1)
+      grid.lines(x=unit(c(CI.L, 1), c("native", "npc")), y=.5,
+                arrow=arrow(length=unit(0.05, "inches")))
+      else { 
+      lineCol <- "black"
+      grid.lines(x=unit(c(CI.L, CI.U), "native"), y=0.5,
+                gp=gpar(col=lineCol))
+      }
+    }
+
+  # Draw Summary Effect Size Diamond
+  drawSummaryCI <- function(CI.L, ES, CI.U) {
+
+    grid.polygon(x=unit(c(CI.L, ES, CI.U, ES), "native"),
+                y=unit(0.5 + c(0, 0.25, 0, -0.25), "npc"))
+  }
+  
+  # Draw Data Column
+  drawDataCol <- function(col, j) {
+    pushViewport(viewport(layout.pos.col=j, xscale=col$range))
+    grid.lines(x=unit(col$ES[length(col$ES)], "native"),
+              y=unit(0:(total.rows-2), "lines"), gp=gpar(lty="dashed"))
+    grid.xaxis(gp=gpar(cex=1))
+    grid.text("Effect Size", y=unit(-3, "lines"), x = unit(0.5, "npc"), 
+            just = "centre", gp=gpar(fontface="bold"))
+    popViewport()
+    x = unit(0.5, "npc")
+    for (i in 1:length(col$rows)) {
+      pushViewport(viewport(layout.pos.row=col$rows[i], layout.pos.col=j,
+                            xscale=col$range))
+      if (col$type[i] == "n")
+        drawNormalCI(col$CI.L[i], col$ES[i], col$CI.U[i], col$size[i])
+      else
+        drawSummaryCI(col$CI.L[i], col$ES[i], col$CI.U[i])
+      popViewport()
+    }
+  }
+
+  # Prepare widths
+  textcolwidth<- max(unit(rep(1, length(textcol$labels)), 
+                                            "grobwidth", textcol$labels))
+  colgap         <- unit(10, "mm")
+  cols           <- unit.c( textcolwidth, colgap, datacolwidth, colgap)
+  add.col.widths <- c()
+  if (extracols > 0){
+  for (i in 1:extracols) {
+    add.col.widths[[i]] <-  max(unit(rep(1, length(add.col[[i]]$labels)), 
+                                    "grobwidth", add.col[[i]]$labels))
+    cols <- unit.c(cols, add.col.widths[[i]])
+    cols <- unit.c(cols, colgap)
+  }
+  }
+
+  # Layout and Columns
+  pushViewport(viewport(layout=grid.layout(total.rows, (4 + (2*extracols)),
+                          widths= cols,
+                          heights=unit(c(1, rep(1, total.rows)), "lines"))))
+
+  # Draw Title and Columns
+  pushViewport(viewport(layout.pos.row=1))
+  grid.text("Forest Plot", 
+            y=unit(+3, "lines"),
+            just = "center", 
+            gp=gpar(fontface="bold"))
+  grid.text(paste(x$model.lab1), 
+            y=unit(+2, "lines"),
+            just = "center", 
+            gp=gpar(fontface="italic"))
+  popViewport()
+
+  # Draw columns
+  drawLabelCol(textcol, 1)
+  
+  if (extracols > 0){
+  for (i in 1:extracols) {
+    drawLabelCol(add.col[[i]], ((i*2)+3))
+  }
+  }
+  drawDataCol(datacol, 3)
+  popViewport()
+}
 
 sensitivity <- function(x) UseMethod("sensitivity")
 
   sensitivity.robu <- function(x){
     
-    modelweights <- x$modelweights
+    modelweights   <- x$modelweights
+    user.weighting <- x$user.weighting
     
     if(modelweights == "HIER")  
-      stop("Sensitivity analysis for rho values only.")
-    if(modelweights == "USER")  
-      stop("Sensitivity analysis for rho values only.")
+      stop("Sensitivity analysis is not available for hierarchical effects.")
+    if(user.weighting == TRUE)  
+      stop("Sensitivity analysis is not available for user specified weights.")
     
     switch(modelweights,
            
@@ -33,8 +281,9 @@ sensitivity <- function(x) UseMethod("sensitivity")
         term2     <- x$term2
         adjusted  <- x$adjusted
         rho.test  <- seq(0, 1, .2)
-        type      <- c("Estimate", rep("-", p), "Std. Err.", rep("-", p))
-        label     <- c(x$labels, x$labels)
+        type      <- c("Estimate", rep("-", p), "Std. Err.", rep("-", p),
+                       "Tau.Sq")
+        label     <- c(x$labels, x$labels, "-")
         df.sen    <- data.frame(Type = type,  Variable = label)
                               
         for (i in (1: length(rho.test))){
@@ -131,7 +380,7 @@ sensitivity <- function(x) UseMethod("sensitivity")
           VR.r    <- VR.MBB1
           SE      <- sqrt(diag(VR.r))         
         }       
-        vals<- c(b.r, SE)
+        vals<- c(b.r, SE, tau.sq)
         vals <- format(vals, digits=3, justify="centre")
         df.sen <- cbind(df.sen, vals)
         }
@@ -158,14 +407,17 @@ group.center <- function(var, grp) {
 }
 
 print.robu <- function(x, digits = 3,...){
-  
+
+user.weighting <- x$user.weighting
 modelweights <- x$modelweights
+
+if(!user.weighting){
   
   switch(modelweights,
          
     HIER = { # Begin HIER
           
-      cat(x$model.lab)
+      cat(x$model.lab, "\n")
       cat("\nModel:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
       cat(paste("Number of clusters ="), x$n, "\n")
       cat(paste("Number of outcomes ="), x$k, paste("(min ="), x$min.k,
@@ -183,7 +435,7 @@ modelweights <- x$modelweights
          
     CORR = { # Begin CORR
            
-      cat(x$model.lab)
+      cat(x$model.lab, "\n")
       cat("\nModel:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
       cat(paste("Number of studies ="), x$n, "\n")
       cat(paste("Number of outcomes ="), x$k, paste("(min ="), x$min.k,
@@ -199,15 +451,27 @@ modelweights <- x$modelweights
       cat(x$notice)      
              
     } # End CORR      
-        
   )
-  
+  } else {
+      cat(x$model.lab, "\n")
+      cat("\nModel:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
+      cat(paste("Number of studies ="), x$n, "\n")
+      cat(paste("Number of outcomes ="), x$k, paste("(min ="), x$min.k,
+          paste(", mean ="), x$mean.k, paste(", median ="), x$median.k, 
+          paste(", max ="), x$max.k,")\n\n")
+      print(x$output)
+      cat("---\n")
+      cat("Signif. codes: < .01 *** < .05 ** < .10 *\n")
+      cat("---\n")
+      cat(x$notice) 
+    
+  } 
 }
 
 robu     <-function(formula, data, studynum,var.eff.size, userweights,
                     modelweights = c("CORR", "HIER"), rho = 0.8, 
                     small = TRUE, ...) {
-  
+  #, na.action = na.omit
   # Evaluate model weighting scheme.
   modelweights <- match.arg(modelweights)
 
@@ -228,6 +492,10 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
   mf                       <- mf[c(1L, m)] 
   mf$drop.unused.levels    <- TRUE
   mf[[1L]]                 <- as.name("model.frame") 
+  # test
+  #mf$na.action             <- substitute(na.action)
+  
+  #
   mf                       <- eval(mf, parent.frame()) 
   
   if(!user.weighting){ 
@@ -251,6 +519,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
 
   dframe$study             <- as.factor(dframe$studynum)
   dframe$study             <- as.numeric(dframe$study)
+  dframe                   <- dframe[order(dframe$study),]
   k                        <- as.data.frame(unclass(rle(sort(dframe$study))))
   dframe$k                 <- k[[1]][ match(dframe$study, k[[2]])]
   dframe$avg.var.eff.size  <- ave(dframe$var.eff.size, dframe$studynum)
@@ -387,8 +656,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
                            sum(diag(V.i%*%sumXWJX)) -
                            sum(diag(V.i%*%sumXJWX)) +
                            sum(diag(V.i%*%sumXJX%*%V.i%*%sumXWWX))
-      # Possible error in code found here, where B1 used # of studies instead
-      # of number of observations.
+
       C1    <- sumV      - sum(diag(V.i%*%sumXJX))
      
       # A2 = tr(W) - tr(V*Sigma(t(X)*Wj*Jj*Wj*Xj))
@@ -403,7 +671,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
       # Estimate of between-studies-wthin-cluster variance component
       omega.sq1  <- ((Qa-C1) * A2 - (Qe - C2) * A1)/(B1 * A2 - B2 * A1)
       omega.sq   <- ifelse(omega.sq1 < 0, 0, omega.sq1)
-
+      #
       # MoM estimators for tau.sq: Qe-C2/A2 - omega.sq.h(B2/A2)
       # Estimate of between-clusters variance component 
       tau.sq1  <- ((Qe - C2)/A2) - omega.sq  *(B2/A2)
@@ -415,7 +683,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
     }, # End HIER
          
     CORR = { # Correlated Effects
-      # Add notes.
+      
       W    <- diag (data.full$weights) 
       sumW <- sum(data.full$weights) # Sum (k.j*w.j)
       Qe   <- t(data.full$e)%*%W%*%data.full$e 
@@ -507,7 +775,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
         inside   <- mapply(function(W, I) 
                            solve(sqrt(W)) %*% I %*% solve(sqrt(W)^3),
                            I = ImHii, W = W.r, SIMPLIFY = FALSE)
-        I <- inside
+        I        <- inside
         eigenvec <- lapply(inside, function(x) eigen(x)$vectors) 
         eigenval <- lapply(inside, function(x) eigen(x)$values)
         
@@ -517,7 +785,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
         
         eigenvec <- lapply(ImHii, function(x) eigen(x)$vectors) 
         eigenval <- lapply(ImHii, function(x) eigen(x)$values)
-        I <- ImHii
+        I        <- ImHii
         
       } # End CORR
            
@@ -525,16 +793,16 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
     
     } else {
 
-        V.big <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) %*% diag(data.full$avg.var.eff.size)
+        V.big     <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) %*% 
+                     diag(data.full$avg.var.eff.size)
         v.j       <- by(data.full$avg.var.eff.size, data.full$study, 
                        function(x) diag(x, nrow = length(x)))
-        v.j.sqrt     <- lapply(v.j, function (x) sqrt(x))
+        v.j.sqrt  <- lapply(v.j, function (x) sqrt(x))
         V.j       <- mapply(function(V, D) V %*% V,
-                          D = diagOnes, V = v.j, SIMPLIFY = FALSE)
+                            D = diagOnes, V = v.j, SIMPLIFY = FALSE)
         
-        inside <- mapply(function(V, I) 
-                          I  %*%V %*% I,
-                          I = ImHii, V = V.j, SIMPLIFY = FALSE)
+        inside    <- mapply(function(V, I) I  %*%V %*% I,
+                            I = ImHii, V = V.j, SIMPLIFY = FALSE)
 
         eigenvec <- lapply(inside, function(x) eigen(x)$vectors) 
         eigenval <- lapply(inside, function(x) eigen(x)$values)
@@ -636,7 +904,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
     CI.U    <- b.r + qt(.975, dfs) * SE
   }
   
-    names(X.full)[2] <-"intercept"
+    names(X.full)[2] <- "intercept"
     labels           <- c(colnames(X.full[2:length(X.full)]))
     labels           <- format(labels, justify = "left")
     b.r              <- format(b.r,digits=3, justify="centre")
@@ -656,8 +924,8 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
     
     
     output            <- data.frame(cbind(labels,b.r,SE,t,prob,CI.L,CI.U, sig))
-    colnames(output)  <- c("", "Estimate","StdErr", "t-value", "Pr(|t|>)", 
-                          "95% CI.low","95% CI.high", "Sig")
+    colnames(output)  <- c("", "Estimate","StdErr", "t-value", "P(|t|>)", 
+                          "95% CI.L","95% CI.U", "Sig")
     model.lab2        <- ""
     notice            <- ""
     
@@ -668,9 +936,9 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
                                scientific=FALSE, justify = "centre")
     output           <- data.frame(cbind(labels, b.r, SE, t, dfs.SW, prob, 
                                          CI.L, CI.U, sig))
-    colnames(output) <- c("", "Estimate","StdErr","t-value","df","Prob(|t|>)",
-                          "95% CI.low","95% CI.high", "Sig")
-    model.lab2       <- "Small-Sample Corrections (Tipton, 2013)"            
+    colnames(output) <- c("", "Estimate","StdErr","t-value","df","P(|t|>)",
+                          "95% CI.L","95% CI.U", "Sig")
+    model.lab2       <- "with Small-Sample Corrections"            
     notice           <- "Note: If df < 3, do not trust the results"
     
   }
@@ -695,21 +963,21 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
     },
          
     CORR = {
-      omega.sq <- NA
+      omega.sq   <- NA
       model.lab1 <- "RVE: Correlated Effects Model"
       model.lab  <- c(model.lab1, model.lab2)
     }
   )
   } else {
     omega.sq <- NA
-    tau.sq <- NA
-    I.2   <- NA
-    term1 <- NA
-    term2 <- NA
-    Qe <- NA
-    term1 <- NA
-    term2 <- NA
-    model.lab1 <- "RVE: User Weights"
+    tau.sq   <- NA
+    I.2      <- NA
+    term1    <- NA
+    term2    <- NA
+    Qe       <- NA
+    term1    <- NA
+    term2    <- NA
+    model.lab1 <- "RVE: User Specified Weights"
     model.lab  <- c(model.lab1, model.lab2)
   }
 
@@ -721,14 +989,15 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
                data.full$effect.size, robust.coefficients = b.r, 
                robust.predicted = data.full$pred.r, n = N, k = sum(k), 
                QE = Qe, robust.residuals = data.full$e.r, robust.varcov = VR.r, 
-               ml = ml, weights = data.full$weights, robust.weights = 
+               ml = ml, weights = data.full$weights, r.weights = 
                data.full$r.weights, studynum = data.full$studynum, 
                model.lab = model.lab, notice = notice, modelweights = 
                modelweights, kl = kl, avg.var = data.full$avg.var.eff.size,
                X = X, y = y, Xreg = Xreg, term1 = term1, term2 = term2, 
-               labels = labels, SE = SE, adjusted = adjusted, mf = mf)
+               labels = labels, SE = SE, adjusted = adjusted, mf = mf,
+               user.weighting = user.weighting, data = data, model.lab1 = 
+               model.lab1, call = sys.call(), CI.L = CI.L, CI.U = CI.U)
 
   class(res) <- "robu"
-  
   res
 }
