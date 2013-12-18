@@ -1,199 +1,156 @@
+#-------------------------------------------------------------------------------
 forest.robu <- function(x, es.lab, study.lab, ...){
-  if(paste(x$ml[3]) != 1)  
-      stop("Requires an intercept-only model.")
-  output        <- x$output
-  dat           <- as.data.frame(x$data)
-  data.full     <- as.data.frame(x$data.full)
-  dat$weights   <- data.full$r.weights
-  dat$r.weights <- data.full$r.weights
-  dat$es        <- data.full$effect.size
-  dat$var       <- data.full$var.eff.size
-  dat           <- droplevels(dat)
-  elipses       <- list(...) 
-  extracols     <- length(elipses)
-
-  # prepare additional columns
   
-  if (extracols > 0){
-  add.col.lab <- c()
-  add.col.title <- c()
-  
-  
-  for (i in 1:extracols) {
-    if(is.numeric(dat[,elipses[[i]]]))
-      dat[,elipses[[i]]] <- format(dat[,elipses[[i]]], 
-                                   digits = 3, justify = "left")
-    
-    add.col.lab[[i]]   <- dat[,elipses[[i]]]
-    add.col.lab[[i] ]  <- as.character(add.col.lab[[i]])
-    add.col.title[[i]] <- names(elipses[i])
-  }
-  }
-  grand.ES      <- x$robust.coefficients
-  grand.CI.L    <- x$CI.L
-  grand.CI.U    <- x$CI.U
-  dat$study.num <- data.full$study
-  dat$es.num    <- ave(dat$study.num, dat$study.num, FUN = seq_along)
-  dat$es.lab    <- dat[,es.lab]
-  dat$es.lab    <- as.character(dat$es.lab)
-  dat$study.lab <- dat[,study.lab]
-  total.rows    <- length(dat$study.num) + 2*max(dat$study.num) + 2
-  total.studies <- max(dat$study.num)
+  if (paste(x$ml[3]) != 1){
+    stop("Requires an intercept-only model.")
+  }  
+  ellipsis        <- lapply(substitute(list(...))[-1L], deparse)
+  n_user_cols     <- length(ellipsis) # num. of additional columns
+  reg_table       <- x$reg_table    
+  N               <- x$N # num. of studies
+  M               <- x$M # num. of clusters 
+  n_rows          <- M + (2 * N) + 4
+  data            <- as.data.frame(x$data) 
+  data.full       <- as.data.frame(x$data.full) 
+  data$r.weights  <- data.full$r.weights 
+  data$study.num  <- data.full$study 
 
-  # Effect size rows and labels
-  es.rows <-  c()
-  textcol.labels <- c()
+  add_col_titles      <- as.list(names(ellipsis)) # user supplied titles
+  add_col_values      <- as.list(data[, unlist(ellipsis, use.names = FALSE)]) 
+  id_col_title        <- "Studies" 
+  id_col_study_values <- unique(data[,study.lab]) 
+  id_col_es_values    <- as.character(data[,es.lab]) 
 
-  for(i in 1:total.studies) {
-    w       <- which(dat$study.num == i)
-    temp    <- (2*i) + w
-    es.rows <- c(es.rows, temp)
-  }
+  data$obs_num    <- seq(1, M)
+  data$study_num  <- data$study.num 
+  data$es_rows    <- as.numeric(data$obs_num + (2 * data$study_num) + 1) 
+  data$study_rows <- as.numeric(ave(data$es_rows, data$study_num, FUN = min)- 1)
+  es_rows         <- data$es_rows 
+  study_rows      <- unique(data$study_rows) 
+  total_row       <- max(n_rows)
+  title_row       <- min(n_rows)
 
-  for (i in 1:length(dat$study.num)) {
-    textcol.labels[[i]] <- textGrob(paste(dat[i,]$es.lab), 
-                                    x = 0, 
-                                    just = "left")
-  }
+  data_col_values <- data[, c("r.weights", "effect.size", "var.eff.size")]
+  data_col_values <- cbind(data_col_values, es_rows)
+  grand.ES        <- reg_table$b.r
+  grand.CI.L      <- reg_table$CI.L 
+  grand.CI.U      <- reg_table$CI.U
 
-  labels  <- list(labels = textcol.labels)
-  rows    <- list(rows = es.rows )
-  textcol <- c(labels, rows)
-
-  # Additional Columns
+  is.numeric_df   <- function(x) all(sapply(x, is.numeric))
+  specify_decimal <- function(x, k) format(round(x, k), nsmall = k)
   
-  add.col <- c()
-  extra.cols <- list()
-  add.rows <- c(es.rows, (min(es.rows)-1))
-  j.pos <- (length(dat$study.num)+1)
-  
-  if (extracols > 0){
-  
-  for (i in 1:extracols) {
-    extra.cols[[i]] <- list()
-    
-    for (j in 1:length(dat$study.num)) {
-      extra.cols[[i]][[j]] <- list()
-      extra.cols[[i]][[j]] <- textGrob(paste(add.col.lab[[i]][j]), 
-                                    x = 0, 
-                                    just = "left")
+  makeTextGrob <- function(values, rows, just = "left", bold = FALSE){  
+    if (is.numeric_df(values)) 
+      values <- lapply(values, function (x) specify_decimal(x, 3))
+    if (!bold){
+      t <- lapply(values, function(x) textGrob(paste(x), x = 0, just = just))
+    } else {
+      t <- lapply(values, function(x) textGrob(paste(x), x = 0, just = just,
+                                                 gp = gpar(fontface = "bold")))
     }
-
-    extra.cols[[i]][[j.pos]] <- textGrob(paste(add.col.title[[i]]), 
-                                  x=0, 
-                                  just="left", 
-                                  gp=gpar(fontface="bold"))
-    
-    labels       <- list(labels = extra.cols[[i]])
-    rows         <- list(rows = add.rows )
-    add.col[[i]] <- c(labels, rows)
+    return(list(values = t, rows = rows)) 
   }
+  
+  addTitleToGrob <- function(col, title){
+    titleGrob  <- makeTextGrob(values = title, rows = 1, bold = TRUE)
+    values     <- c(col$values, titleGrob$values)
+    rows       <- c(col$rows, titleGrob$rows)
+    return(list(values = values, rows = rows)) 
   }
+  
+  addGrobToGrob <- function(col1, col2){
+    values <- c(col1$values, col2$values)
+    rows   <- c(col1$rows, col2$rows)
+    return(list(values = values, rows = rows)) 
+  } 
 
-  # Study rows and labels
-  study.rows   <- c()
-  study.labels <- c()
-  total.label  <- c()
-
-  for(i in 1:total.studies) {
-    w          <- which(dat$study.num == i)
-    temp       <- min((2*i + w)) - 1
-    study.rows <- c(study.rows, temp)
-  }
-
-  study.rows <- c(study.rows, max(total.rows))
-  orig.study.rows <- which(dat$es.num == 1)
-
-  for (i in 1:length(orig.study.rows)) {
-    study.labels[[i]] <- textGrob(paste(dat[(orig.study.rows[i]),]$study.lab), 
-                                  x=0, 
-                                  just="left", 
-                                  gp=gpar(fontface="bold"))
+  makeDataGrob <- function(x){  
+    ES      <- x$effect.size
+    size    <- x$r.weights / max(x$r.weights)
+    CI.U    <- x$effect.size + (1.96 * sqrt(x$var.eff.size))
+    CI.L    <- x$effect.size - (1.96 * sqrt(x$var.eff.size))
+    type    <- rep("n", M)   
+    rows    <- x$es_rows
+    return(list(type = type, rows = rows, size = size, CI.L = CI.L, CI.U = CI.U, 
+                ES = ES)) 
   }
 
-  study.labels[[length(orig.study.rows)+1]] <- textGrob(paste("Total"), 
-                                                        x = 0, 
-                                                        just = "left", 
-                                                        gp = gpar(fontface = 
-                                                                    "bold"))
-  textcol$labels <- c(textcol$labels, study.labels)
-  textcol$rows   <- c(textcol$rows, study.rows)
-
-  # Data column
-
-  type          <- c()
-  effect.size   <- c()
-  size          <- c()
-  CI.L          <- c()
-  CI.U          <- c()
-
-  for (i in 1:length(dat$study.num)) {
-    effect.size[[i]] <- dat[i,]$es
-    CI.U[[i]] <- dat[i,]$es + (1.96*sqrt(dat[i,]$var))
-    CI.L[[i]] <- dat[i,]$es - (1.96*sqrt(dat[i,]$var))
-    size[[i]] <- dat[i,]$weights 
-    type[[i]] <- "n"
+  addSummaryToDataGrob <- function(x){ 
+    type  <- c(x$type, "s")
+    rows  <- c(x$rows, max(x$rows) + 2)
+    size  <- as.numeric(x$size)
+    size  <- x$size / max(x$size)
+    ES    <- c(x$ES, grand.ES)
+    CI.L  <- c(x$CI.L, grand.CI.L)
+    CI.U  <- c(x$CI.U, grand.CI.U)
+    min   <- floor(as.numeric(min(CI.L)))
+    max   <- ceiling(as.numeric(max(CI.U)))
+    range <- c(min, max)
+    return(list(type = type, rows = rows, size = size, CI.L = CI.L, CI.U = CI.U, 
+                ES = ES, min = min, max = max, range = range)) 
   }
 
-  type  <- c(type, "s")
-  rows  <- c(es.rows, max(es.rows)+2)
-  size  <- size/max(size)
-  ES    <- c(effect.size, grand.ES)
-  CI.L  <- c(CI.L, grand.CI.L)
-  CI.U  <- c(CI.U, grand.CI.U)
+  if (n_user_cols > 0){
+    add_col <- lapply(add_col_values, function(x) makeTextGrob(x, es_rows))
+    add_col <- Map(function(x, y) addTitleToGrob(x, y), add_col, add_col_titles)
+  }
 
-  datacol       <- list(type = type, rows = rows, size = size, CI.L = CI.L, 
-                        CI.U = CI.U, ES = ES)
-  datacolwidth  <- unit(3, "inches")
-  min           <- floor(as.numeric(min(datacol$CI.L)))
-  max           <- ceiling(as.numeric(max(datacol$CI.U)))
-  datacol$range <- c(min, max)
+  id_col_study_grob <- makeTextGrob(id_col_study_values, study_rows, bold =TRUE)
+  id_col_es_grob    <- makeTextGrob(id_col_es_values, es_rows)
+  id_col            <- addGrobToGrob(id_col_study_grob, id_col_es_grob)
+  id_col            <- addTitleToGrob(id_col, id_col_title) 
+  data_col          <- makeDataGrob(data_col_values)
+  data_col          <- addSummaryToDataGrob(data_col)
 
-  # Draw Label Column
   drawLabelCol <- function(col, j) {
     for (i in 1:length(col$rows)) {
-      pushViewport(viewport(layout.pos.row=col$rows[i], layout.pos.col=j))
-      grid.draw(col$labels[[i]])
+      pushViewport(viewport(layout.pos.row = col$rows[i], layout.pos.col = j))
+      grid.draw(col$values[[i]])
       popViewport()
     }
   }
 
-  # Draw Confidence Intervals
   drawNormalCI <- function(CI.L, ES, CI.U, size) {
-    grid.rect(x=unit(ES, "native"),
-              width=unit(size, "snpc"), height=unit(size, "snpc"),
-              gp=gpar(fill="black"))
-
-    if (convertX(unit(CI.U, "native"), "npc", valueOnly=TRUE) > 1)
-      grid.lines(x=unit(c(CI.L, 1), c("native", "npc")), y=.5,
-                arrow=arrow(length=unit(0.05, "inches")))
-      else { 
+    grid.rect(x = unit(ES, "native"), 
+              width = unit(size, "snpc"), 
+              height = unit(size, "snpc"),
+              gp = gpar(fill = "black"))
+    
+    if (convertX(unit(CI.U, "native"), "npc", valueOnly = TRUE) > 1)
+      grid.lines(x = unit(c(CI.L, 1), c("native", "npc")), 
+                 y = .5,
+                 arrow = arrow(length = unit(0.05, "inches")))
+    else { 
       lineCol <- "black"
-      grid.lines(x=unit(c(CI.L, CI.U), "native"), y=0.5,
-                gp=gpar(col=lineCol))
-      }
+      grid.lines(x = unit(c(CI.L, CI.U), "native"), 
+                 y = 0.5,
+                 gp = gpar(col = lineCol))
     }
-
-  # Draw Summary Effect Size Diamond
-  drawSummaryCI <- function(CI.L, ES, CI.U) {
-
-    grid.polygon(x=unit(c(CI.L, ES, CI.U, ES), "native"),
-                y=unit(0.5 + c(0, 0.25, 0, -0.25), "npc"))
   }
-  
-  # Draw Data Column
-  drawDataCol <- function(col, j) {
-    pushViewport(viewport(layout.pos.col=j, xscale=col$range))
-    grid.lines(x=unit(col$ES[length(col$ES)], "native"),
-              y=unit(0:(total.rows-2), "lines"), gp=gpar(lty="dashed"))
-    grid.xaxis(gp=gpar(cex=1))
-    grid.text("Effect Size", y=unit(-3, "lines"), x = unit(0.5, "npc"), 
-            just = "centre", gp=gpar(fontface="bold"))
+
+  drawSummaryCI <- function(CI.L, ES, CI.U) {
+    grid.polygon(x=unit(c(CI.L, ES, CI.U, ES), "native"),
+                 y=unit(0.5 + c(0, 0.25, 0, -0.25), "npc"))
+  }
+
+  drawDataCol <- function(col, j) { # j = col_place
+    pushViewport(viewport(layout.pos.col = j, xscale = col$range))
+    grid.lines(x = unit(col$ES[length(col$ES)], "native"),
+               y = unit(0:(n_rows - 2), "lines"), 
+               gp = gpar(lty = "dashed"))
+    grid.xaxis(gp=gpar(cex = 1))
+    grid.text("Effect Size",                  
+              y = unit(-3, "lines"), 
+              x = unit(0.5, "npc"), 
+              just = "centre", 
+              gp = gpar(fontface = "bold"))
     popViewport()
     x = unit(0.5, "npc")
+    
     for (i in 1:length(col$rows)) {
-      pushViewport(viewport(layout.pos.row=col$rows[i], layout.pos.col=j,
-                            xscale=col$range))
+      pushViewport(viewport(layout.pos.row = col$rows[i], 
+                            layout.pos.col = j,
+                            xscale = col$range))
       if (col$type[i] == "n")
         drawNormalCI(col$CI.L[i], col$ES[i], col$CI.U[i], col$size[i])
       else
@@ -202,424 +159,454 @@ forest.robu <- function(x, es.lab, study.lab, ...){
     }
   }
 
-  # Prepare widths
-  textcolwidth<- max(unit(rep(1, length(textcol$labels)), 
-                                            "grobwidth", textcol$labels))
-  colgap         <- unit(10, "mm")
-  cols           <- unit.c( textcolwidth, colgap, datacolwidth, colgap)
-  add.col.widths <- c()
-  if (extracols > 0){
-  for (i in 1:extracols) {
-    add.col.widths[[i]] <-  max(unit(rep(1, length(add.col[[i]]$labels)), 
-                                    "grobwidth", add.col[[i]]$labels))
-    cols <- unit.c(cols, add.col.widths[[i]])
-    cols <- unit.c(cols, colgap)
-  }
+  id_col_width   <- max(unit(rep(1, length(id_col$values)), "grobwidth", 
+                           id_col$values))
+  data_col_width <- unit(3, "inches")
+  gap_col        <- unit(10, "mm")
+  cols           <- unit.c(id_col_width, gap_col, data_col_width, gap_col)
+  
+  add_col_widths <- c()
+  if (n_user_cols > 0){
+    for (i in 1:n_user_cols) {
+      add_col_widths[[i]] <-  max(unit(rep(1, length(add_col[[i]]$values)), 
+                                     "grobwidth", add_col[[i]]$values))
+      cols <- unit.c(cols, add_col_widths[[i]])
+      cols <- unit.c(cols, gap_col)
+    }
   }
 
-  # Layout and Columns
-  pushViewport(viewport(layout=grid.layout(total.rows, (4 + (2*extracols)),
-                          widths= cols,
-                          heights=unit(c(1, rep(1, total.rows)), "lines"))))
+  pushViewport(viewport(layout = grid.layout(n_rows, (4 + (2 * n_user_cols)),
+                        widths = cols,
+                        heights = unit(c(1, rep(1, n_rows)), "lines"))))
 
-  # Draw Title and Columns
-  pushViewport(viewport(layout.pos.row=1))
+  pushViewport(viewport(layout.pos.row = 1))
+  
   grid.text("Forest Plot", 
-            y=unit(+3, "lines"),
+            y = unit(+3, "lines"),
             just = "center", 
-            gp=gpar(fontface="bold"))
+            gp = gpar(fontface = "bold"))
+  
   grid.text(paste(x$model.lab1), 
-            y=unit(+2, "lines"),
+            y = unit(+2, "lines"),
             just = "center", 
-            gp=gpar(fontface="italic"))
+            gp = gpar(fontface = "italic"))
+  
   popViewport()
 
-  # Draw columns
-  drawLabelCol(textcol, 1)
+  drawLabelCol(id_col, 1)
   
-  if (extracols > 0){
-  for (i in 1:extracols) {
-    drawLabelCol(add.col[[i]], ((i*2)+3))
+  if (n_user_cols > 0){
+    for (i in 1:n_user_cols) {
+      drawLabelCol(add_col[[i]], ((i * 2) + 3))
+    }
   }
-  }
-  drawDataCol(datacol, 3)
+
+  drawDataCol(data_col, 3)
   popViewport()
 }
-
+#-------------------------------------------------------------------------------
 sensitivity <- function(x) UseMethod("sensitivity")
 
   sensitivity.robu <- function(x){
     
     modelweights   <- x$modelweights
-    user.weighting <- x$user.weighting
+    user_weighting <- x$user_weighting
     
     if(modelweights == "HIER")  
       stop("Sensitivity analysis is not available for hierarchical effects.")
-    if(user.weighting == TRUE)  
-      stop("Sensitivity analysis is not available for user specified weights.")
     
-    switch(modelweights,
-           
-      
-      HIER = {
+    if(user_weighting == TRUE)  
+      stop("Sensitivity analysis is not available for user specified weights.")
         
-      },
-           
-      CORR = {
-        plotvalsALL <- 0
-        plotvalls <- 0
+        mod_info  <- x$mod_info
         p         <- x$p
-        N         <- x$n
+        N         <- x$N
         Xreg      <- x$Xreg
         y         <- x$y
         X         <- x$X
         data.full <- x$data.full
         X.full    <- x$X.full
         k         <- data.full$k
-        kl        <- x$kl
-        term1     <- x$term1
-        term2     <- x$term2
-        adjusted  <- x$adjusted
+        k_list    <- x$k_list
+        ml        <- x$ml
+        term1     <- mod_info$term1
+        term2     <- mod_info$term2
+        small     <- x$small
+        labels    <- x$labels
+        mod_label <- x$mod_label
         rho.test  <- seq(0, 1, .2)
-        type      <- c("Estimate", rep("-", p), "Std. Err.", rep("-", p),
-                       "Tau.Sq")
-        label     <- c(x$labels, x$labels, "-")
-        df.sen    <- data.frame(Type = type,  Variable = label)
-                              
-        for (i in (1: length(rho.test))){
-          tau.sq1 <- term1 + rho.test[i]*term2 
-          tau.sq  <- ifelse(tau.sq1 < 0, 0, tau.sq1)
-          data.full$r.weights <- 1/(data.full$k * 
-                                 (data.full$avg.var.eff.size + tau.sq))
-          W.r              <- by(data.full$r.weights, data.full$study, 
-                                function(x) diag(x, nrow = length(x)))
-          sumXWX.r         <- mapply(function(X,W) t(X) %*% W %*% X, 
-                                    X=X, W=W.r, 
-                                    SIMPLIFY = FALSE)
-          sumXWy.r         <- mapply(function(X,W,y) t(X) %*% W %*% y, 
-                                     X=X, W=W.r, y=y, 
-                                     SIMPLIFY = FALSE)
-          sumXWX.r         <- Reduce("+", sumXWX.r)
-          sumXWy.r         <- Reduce("+", sumXWy.r)
-          b.r              <- solve(sumXWX.r)%*%sumXWy.r # Robust betas
     
-          data.full$pred.r <- Xreg%*%b.r
-          data.full$e.r    <- cbind(data.full$effect.size) - data.full$pred.r
-          data.full$e.r    <- as.numeric(data.full$e.r)
-          sigma.hat.r      <- by(data.full$e.r, data.full$study, 
-                                function(x) tcrossprod(x))
+        rho_labels   <- c(paste("Rho = ", seq(0, 1, .2), sep=""))
+        var_labels   <- rep("", 2 * (p + 1))
+        var_labels[seq(1, length(var_labels), by = 2)] <- labels
+        var_labels   <- c(var_labels, "Tau.sq")
         
-       if (adjusted != 1) { 
-
-          sumXWeeWX.r      <- mapply(function(X,W,V) t(X) %*% W %*% V %*% W %*% X, 
-                                              X = X, W = W.r, V = sigma.hat.r, 
-                                             SIMPLIFY = FALSE)
-          sumXWeeWX.r      <- Reduce("+", sumXWeeWX.r)   
-          VR.r             <- solve(sumXWX.r) %*% sumXWeeWX.r %*% solve(sumXWX.r)  
-          SE               <- sqrt(diag(VR.r)) * sqrt(N/(N-(p+1)))
-
-        } else { 
+        col2_labels  <- rep("", 2 * (p + 1))
+        col2_labels[seq(1, length(col2_labels), by = 2)] <- "Coefficient"
+        col2_labels[seq(2, length(col2_labels), by = 2)] <- "Std. Error"
+        col2_labels  <- c(col2_labels, "Estimate")
+        sen          <- data.frame(cbind(var_labels, col2_labels))
+        
+        for (i in (1: length(rho.test))){
           
-          Q        <- solve(sumXWX.r)
-          W.r.des  <- diag(data.full$r.weights)
-          ImH      <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) - 
-                      Xreg %*% Q %*% t(Xreg) %*% W.r.des
-          dfS      <- c(rep(0,p+1))
-          diagOnes <- by(rep(1,nrow(X.full)), X.full$study, 
-                         function(x) diag(x, nrow = length(x)))
-          Q.list   <- rep(list(Q), N)
-          ImHii    <- mapply(function(X, Q, W, D) D - X %*% Q %*% t(X) %*% W,
-                                      X = X, Q = Q.list, W = W.r, D = diagOnes, 
-                                      SIMPLIFY = FALSE)
-          eigenvec <- lapply(ImHii, function(x) eigen(x)$vectors) 
-          eigenval <- lapply(ImHii, function(x) eigen(x)$values)
-          I        <- ImHii
-          A.MBB    <- mapply(function (eigenvec, eigenval, kl) 
-                       eigenvec %*% diag(1/sqrt(eigenval), kl, kl) %*% 
-                       t(eigenvec),
-                       eigenvec = eigenvec, eigenval = eigenval, kl = kl, 
-                       SIMPLIFY = FALSE)
-          A.MBB1   <- mapply(function(K, A, I) if(K > 1) A 
-                      else matrix(sqrt(solve(I))), 
-                      K = kl, I = I, A = A.MBB, 
-                      SIMPLIFY = FALSE)
-          
-          A.MBB2                <- A.MBB 
-          sumXWA.MBBeeA.MBBWX.r <- mapply(function(X,W,A,S) 
-                                          t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                          X = X, W = W.r, A = A.MBB1, 
-                                          S = sigma.hat.r, 
-                                          SIMPLIFY = FALSE)
-          sumXWA.MBBeeA.MBBWX.r <- Reduce("+", sumXWA.MBBeeA.MBBWX.r) 
-          data.full$ImH         <- ImH
-          ImH                   <- lapply(split(data.full$ImH, data.full$study), 
-                                    matrix, ncol=nrow(data.full))
+           tau.sq1             <- term1 + rho.test[i] * term2 
+           tau.sq              <- ifelse(tau.sq1 < 0, 0, tau.sq1)
+           data.full$r.weights <- 1 / (data.full$k * 
+                                  (data.full$avg.var.eff.size + tau.sq))
+           W.r.big             <- diag(data.full$r.weights)  # W
+           W.r                 <- by(data.full$r.weights, data.full$study, 
+                                     function(x) diag(x, nrow = length(x)))
+           sumXWX.r            <- Reduce("+", Map(function(X, W) 
+                                                  t(X) %*% W %*% X, 
+                                                  X, W.r))
+           sumXWy.r            <- Reduce("+", Map(function(X, W, y) 
+                                                  t(X) %*% W %*% y, 
+                                                  X, W.r, y))
+           b.r                 <- solve(sumXWX.r) %*% sumXWy.r 
+           data.full$pred.r    <- Xreg %*% b.r
+           data.full$e.r       <- cbind(data.full$effect.size) - 
+                                  data.full$pred.r
+           data.full$e.r       <- as.numeric(data.full$e.r)
+           sigma.hat.r         <- by(data.full$e.r, data.full$study, 
+                                    function(x) tcrossprod(x))
+           
+              if (!small) { # Begin small = FALSE 
+                
+                 sumXWeeWX.r <- Reduce("+", Map(function(X, W, V) 
+                                                t(X) %*% W %*% V %*% W %*% X, 
+                                                X, W.r, sigma.hat.r))
+                 VR.r        <- solve(sumXWX.r) %*% sumXWeeWX.r %*% 
+                                solve(sumXWX.r)  
+                 SE          <- sqrt(diag(VR.r)) * sqrt(N / (N - (p + 1)))
 
-          giTemp                <- mapply(function(I, A, W, X, Q)
-                                          t(I) %*% A %*% W %*% X %*% Q, 
-                                          I = ImH, A = A.MBB2, W = W.r, X = X, 
-                                          Q = Q.list, 
-                                          SIMPLIFY = FALSE) 
-          dfs <- c(rep(0,p+1))
-          
-          for (i in 1:(p+1)) { 
-            L      <- c(rep(0,p+1))
-            L[i]   <- 1
-            Ll     <- rep(list(L), N)
-            G      <- 0
-            gi     <- mapply(function(G,L) G %*% cbind(L), 
-                             G = giTemp, L = Ll, SIMPLIFY = FALSE)
-            G      <- lapply(gi, function(x) tcrossprod(x))
-            G      <- Reduce("+", G)
-            B      <- solve(sqrt(W.r.des))%*% G %*% solve(sqrt(W.r.des))
-            e.val2 <- eigen(B)
-            dfs[i] <- sum(e.val2$values)^2/sum(e.val2$values^2)
-          }
-    
-          VR.MBB1 <- solve(sumXWX.r)%*%sumXWA.MBBeeA.MBBWX.r%*%solve(sumXWX.r)
-          VR.r    <- VR.MBB1
-          SE      <- sqrt(diag(VR.r))         
-        }       
-        vals<- c(b.r, SE, tau.sq)
-        vals <- format(vals, digits=3, justify="centre")
-        df.sen <- cbind(df.sen, vals)
+              } else { 
+                
+                Q             <- solve(sumXWX.r) #
+                Q.list        <- rep(list(Q), N)
+                H             <- Xreg %*% Q %*% t(Xreg) %*% W.r.big 
+                ImH           <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) - H
+                data.full$ImH <- cbind(ImH)
+                ImHj          <- by(data.full$ImH, data.full$study, 
+                                    function(x) as.matrix(x))
+                dfS           <- c(rep(0, p + 1))
+                diag_one      <- by(rep(1, nrow(X.full)), X.full$study, 
+                                    function(x) diag(x, nrow = length(x)))
+                ImHii         <- Map(function(X, Q, W, D) 
+                                     D - X %*% Q %*% t(X) %*% W,
+                                     X, Q.list, W.r, diag_one)
+                eigenvec <- lapply(ImHii, function(x) eigen(x)$vectors) 
+                eigenval <- lapply(ImHii, function(x) eigen(x)$values)
+                I        <- ImHii
+                A.MBB    <- Map(function (eigenvec, eigenval, k_list) 
+                                eigenvec %*% diag(1/sqrt(eigenval), 
+                                                  k_list, k_list) 
+                                %*% t(eigenvec),
+                                eigenvec, eigenval, k_list)
+                A.MBB1    <- Map(function(K, A, I) 
+                                 if (K > 1) A else matrix(sqrt(solve(I))), 
+                                 k_list, A.MBB, I)
+                A.MBB2    <- A.MBB 
+                
+                sumXWA.MBBeeA.MBBWX.r <- Reduce("+", Map(function(X,W,A,S) 
+                                                         t(X) %*% W %*% A %*% 
+                                                           S %*% A %*% W %*% X, 
+                                                         X, W.r, A.MBB2, 
+                                                           sigma.hat.r))
+                data.full$ImH         <- ImH
+                ImH                   <- lapply(split(data.full$ImH, 
+                                                      data.full$study), 
+                                                matrix, ncol=nrow(data.full))
+                giTemp                <- Map(function(I, A, W, X, Q)
+                                             t(I) %*% A %*% W %*% X %*% Q, 
+                                             ImHj, A.MBB2, W.r, X, Q.list) 
+                dfs                   <- c(rep(0, p + 1))
+                
+                for (i in 1:(p + 1)) { 
+                   L      <- c(rep(0,p + 1))
+                   L[i]   <- 1
+                   Ll     <- rep(list(L), N)
+                   gi     <- Map(function(G, L) G %*% cbind(L), giTemp, Ll)
+                   G      <- Reduce("+", lapply(gi, function(x) tcrossprod(x)))
+                   B      <- solve(sqrt(W.r.big) )%*% G %*% solve(sqrt(W.r.big))
+                   e.val2 <- eigen(B)
+                   dfs[i] <- sum(e.val2$values)^2 / sum(e.val2$values^2)
+                }
+                
+               VR.MBB1 <- solve(sumXWX.r) %*% sumXWA.MBBeeA.MBBWX.r %*% 
+                          solve(sumXWX.r)
+               VR.r    <- VR.MBB1
+               SE      <- sqrt(diag(VR.r))         
+             } 
+           
+           vals <- c()
+           temp_vals <- c()
+           for (i in 1:(p + 1)) { 
+              temp_vals <- c(b.r[i], SE[i])
+              vals <- c(vals, temp_vals)
+           }
+           vals <- c(vals, tau.sq)
+           vals <- format(vals, digits=3, justify="centre")
+           sen <- cbind(sen, vals)
         }
-      }
-    )
-    rho.names <- paste("rho=", seq(0,1,.2), sep="")
-    colnames(df.sen)[3:(length(rho.test)+2)] <- rho.names
-    return(df.sen)
-
+    colnames(sen)     <- c(" ", " ", rho_labels)
+    format(sen[,1], justify = "left")
+    cat(mod_label, "\n")
+    cat("Model:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
+    cat(paste("Sensitivity Analysis"), "\n\n")
+    print.data.frame(sen, quote = FALSE, row.names = FALSE, right = FALSE)
   }
-          
+# ------------------------------------------------------------------------------
 group.mean <- function(var, grp) {
   grp <- as.factor(grp)
   grp <- as.numeric(grp)
   var <- as.numeric(var)
   return(tapply(var, grp, mean, na.rm = TRUE)[grp])
 }
-
+#-------------------------------------------------------------------------------
 group.center <- function(var, grp) {
   grp <- as.factor(grp)
   grp <- as.numeric(grp)
   var <- as.numeric(var)
   return(var - tapply(var, grp, mean, na.rm = TRUE)[grp])
 }
-
+#-------------------------------------------------------------------------------
 print.robu <- function(x, digits = 3,...){
 
-user.weighting <- x$user.weighting
-modelweights <- x$modelweights
+user_weighting <- x$user_weighting
+modelweights   <- x$modelweights
+mod_info       <- x$mod_info
 
-if(!user.weighting){
+output              <- x$reg_table
+output              <- format(output, trim = TRUE, digits = digits, 
+                              scientific = FALSE)
+colnames(output)    <- c("", "Estimate","StdErr", "t-value", "P(|t|>)", 
+                             "95% CI.L","95% CI.U", "Sig")
+
+if(!user_weighting){
   
   switch(modelweights,
          
-    HIER = { # Begin HIER
+    HIER = { # Begin HIER 
           
-      cat(x$model.lab, "\n")
+      cat(x$mod_label, "\n")
       cat("\nModel:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
-      cat(paste("Number of clusters ="), x$n, "\n")
-      cat(paste("Number of outcomes ="), x$k, paste("(min ="), x$min.k,
-          paste(", mean ="), x$mean.k, paste(", median ="), x$median.k, 
-          paste(", max ="), x$max.k,")\n")
-      cat(paste("Omega.sq ="), x$omega.sq, "\n")
-      cat(paste("Tau.Sq ="), x$tau.sq, "\n\n")
-      print(x$output)
+      cat(paste("Number of clusters ="), x$N, "\n")
+      cat(paste("Number of outcomes ="), sum(x$k), paste("(min ="), min(x$k),
+          paste(", mean ="), format(mean(x$k), digits = 3), paste(", median ="), 
+          median(x$k), paste(", max ="), max(x$k),")\n")
+      cat(paste("Omega.sq ="), mod_info$omega.sq, "\n")
+      cat(paste("Tau.sq ="), mod_info$tau.sq, "\n\n")
+      print(output, digits = 3)
       cat("---\n")
       cat("Signif. codes: < .01 *** < .05 ** < .10 *\n")
       cat("---\n")
-      cat(x$notice)
+      cat(x$mod_notice)
            
     }, # End HIER
          
     CORR = { # Begin CORR
            
-      cat(x$model.lab, "\n")
+      cat(x$mod_label, "\n")
       cat("\nModel:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
-      cat(paste("Number of studies ="), x$n, "\n")
-      cat(paste("Number of outcomes ="), x$k, paste("(min ="), x$min.k,
-          paste(", mean ="), x$mean.k, paste(", median ="), x$median.k, 
-          paste(", max ="), x$max.k,")\n")
-      cat(paste("Rho ="), x$rho, "\n")
-      cat(paste("I2 ="), x$I.2, "\n")
-      cat(paste("Tau.Sq ="), x$tau.sq, "\n\n")
-      print(x$output)
+      cat(paste("Number of studies ="), x$N, "\n")
+      cat(paste("Number of outcomes ="), sum(x$k), paste("(min ="), min(x$k),
+          paste(", mean ="), format(mean(x$k), digits = 3), paste(", median ="), 
+          median(x$k), paste(", max ="), max(x$k),")\n")
+      cat(paste("Rho ="), mod_info$rho, "\n")
+      cat(paste("I.sq ="), mod_info$I.2, "\n")
+      cat(paste("Tau.sq ="), mod_info$tau.sq, "\n\n")
+      print(output)
       cat("---\n")
       cat("Signif. codes: < .01 *** < .05 ** < .10 *\n")
       cat("---\n")
-      cat(x$notice)      
+      cat(x$mod_notice)      
              
-    } # End CORR      
-  )
-  } else {
-      cat(x$model.lab, "\n")
+    } # End CORR
+    
+  ) 
+  
+  } else { # Begin userweights
+    
+      cat(x$mod_label, "\n")
       cat("\nModel:",paste(x$ml[2]), paste(x$ml[[1]]), paste(x$ml[3]),"\n\n")
-      cat(paste("Number of studies ="), x$n, "\n")
-      cat(paste("Number of outcomes ="), x$k, paste("(min ="), x$min.k,
-          paste(", mean ="), x$mean.k, paste(", median ="), x$median.k, 
-          paste(", max ="), x$max.k,")\n\n")
-      print(x$output)
+      cat(paste("Number of studies ="), x$N, "\n")
+      cat(paste("Number of outcomes ="), sum(x$k), paste("(min ="), min(x$k),
+          paste(", mean ="), format(mean(x$k), digits = 3), paste(", median ="), 
+          median(x$k), paste(", max ="), max(x$k),")\n")
+      print(output)
       cat("---\n")
       cat("Signif. codes: < .01 *** < .05 ** < .10 *\n")
       cat("---\n")
-      cat(x$notice) 
+      cat(x$mod_notice) 
     
   } 
 }
-
-robu     <-function(formula, data, studynum,var.eff.size, userweights,
-                    modelweights = c("CORR", "HIER"), rho = 0.8, 
-                    small = TRUE, ...) {
-  #, na.action = na.omit
+#-------------------------------------------------------------------------------
+robu     <- function(formula, data, studynum,var.eff.size, userweights,
+                     modelweights = c("CORR", "HIER"), rho = 0.8, 
+                     small = TRUE, ...) {
+  
   # Evaluate model weighting scheme.
   modelweights <- match.arg(modelweights)
 
-  if(modelweights == "CORR" && rho > 1 | rho < 0)  
-       stop("Rho must be a value between 0 and 1.")
+  if (modelweights == "CORR" && rho > 1 | rho < 0)  
+      stop ("Rho must be a value between 0 and 1.")
   
   if (missing(userweights)){
-    user.weighting = FALSE
-  } else {
-    user.weighting = TRUE
+     user_weighting = FALSE 
+  } else { 
+     user_weighting = TRUE
   }
 
   cl                       <- match.call() # Full model call
   mf                       <- match.call(expand.dots = FALSE)
-  ml                       <- mf[[2]] # Extract formula 
+  ml                       <- mf[[2]] # Model formula 
   m                        <- match(c("formula", "data", "studynum", 
-                                     "var.eff.size", "userweights"), names(mf)) 
+                                      "var.eff.size", "userweights"), names(mf))
   mf                       <- mf[c(1L, m)] 
   mf$drop.unused.levels    <- TRUE
-  mf[[1L]]                 <- as.name("model.frame") 
-  # test
-  #mf$na.action             <- substitute(na.action)
-  
-  #
+  mf[[1L]]                 <- as.name("model.frame")
   mf                       <- eval(mf, parent.frame()) 
   
-  if(!user.weighting){ 
+  if(!user_weighting){ 
+    
     dframe                 <- data.frame(effect.size = mf[,1],
-                                        model.matrix(formula, mf), 
+                                        model.matrix(formula, mf),
                                         studynum = mf[["(studynum)"]],
                                         var.eff.size = mf[["(var.eff.size)"]])
-    X.full.names           <-  names(dframe)[-match(c("effect.size", "studynum", 
-                               "var.eff.size"), names(dframe))] 
-  } else {
+    
+    X.full.names           <- names(dframe)[-match(c("effect.size", 
+                                                     "studynum", 
+                                                     "var.eff.size"), 
+                                                   names(dframe))] 
+    
+  } else { # Begin userweights
     
     dframe                 <- data.frame(effect.size = mf[,1],
                                         model.matrix(formula, mf), 
                                         studynum = mf[["(studynum)"]], 
                                         var.eff.size = mf[["(var.eff.size)"]],
                                         userweights = mf[["(userweights)"]])
-      
-    X.full.names           <-  names(dframe)[-match(c("effect.size", "studynum", 
-                                "userweights", "var.eff.size"), names(dframe))] 
-  }
+    
+    X.full.names           <- names(dframe)[-match(c("effect.size", 
+                                                     "studynum", 
+                                                     "userweights", 
+                                                     "var.eff.size"), 
+                                                   names(dframe))] 
+  } # End userweights
 
   dframe$study             <- as.factor(dframe$studynum)
   dframe$study             <- as.numeric(dframe$study)
   dframe                   <- dframe[order(dframe$study),]
-  k                        <- as.data.frame(unclass(rle(sort(dframe$study))))
-  dframe$k                 <- k[[1]][ match(dframe$study, k[[2]])]
-  dframe$avg.var.eff.size  <- ave(dframe$var.eff.size, dframe$studynum)
+  k_temp                   <- as.data.frame(unclass(rle(sort(dframe$study))))
+  dframe$k                 <- k_temp[[1]][ match(dframe$study, k_temp[[2]])]
+  dframe$avg.var.eff.size  <- ave(dframe$var.eff.size, dframe$study)
   dframe$sd.eff.size       <- sqrt(dframe$var.eff.size)
   
-  switch(modelweights,
-    HIER = {dframe$weights <- 1/dframe$var.eff.size},
-    CORR = {dframe$weights <- 1/(dframe$k*dframe$avg.var.eff.size)}
-  )
+  switch(modelweights, 
+         
+    HIER = { # Begin HIER
+      
+        dframe$weights <- 1 / dframe$var.eff.size
+      
+    }, # End HIER
+    
+    CORR = { # Begin CORR
+      
+        dframe$weights <- 1 / (dframe$k * dframe$avg.var.eff.size)
+      
+    } # End CORR
+    
+  ) 
   
-  X.full                   <- dframe[c("study", X.full.names)]
-  data.full.names          <- names(dframe)[-match(c("studynum",X.full.names), 
+  X.full           <- dframe[c("study", X.full.names)]
+  
+  data.full.names  <- names(dframe)[-match(c("studynum",X.full.names), 
                                           names(dframe))] 
-  data.full                <- dframe[c(data.full.names)]
-  
-  clusters         <- data.full[ !duplicated(data.full$study), ] 
-  k                <- clusters$k
-  kl               <- as.list(k)
-  p                <- ncol(X.full)-2 
-  N                <- max(data.full$study) 
-  W                <- by(data.full$weights, data.full$study, 
-                         function(x) diag(x, nrow = length(x)))
-  W                <- matrix(W)
+  data.full        <- dframe[c(data.full.names)]
+  k                <- data.full[ !duplicated(data.full$study), ]$k
+  k_list           <- as.list(k) 
+  M                <- nrow(data.full) # Number of units in analysis
+  p                <- ncol(X.full) - 2 # Number of (non-intercept) covariates 
+  N                <- max(data.full$study) # Number of studies
+  W                <- as.matrix(by(data.full$weights, data.full$study, 
+                                   function(x) diag(x, nrow = length(x))))
   X                <- data.matrix(X.full)
-  X                <- lapply(split(X[,2:(p+2)], X[,1]), matrix, ncol=p+1)
+  X                <- lapply(split(X[,2:(p + 2)], X[,1]), matrix, ncol = p + 1)
   y                <- by(data.full$effect.size, data.full$study, 
                          function(x) matrix(x))
-  J                <- by(rep(1,nrow(X.full)), X.full$study, 
+  J                <- by(rep(1, nrow(X.full)), X.full$study, 
                          function(x) matrix(x, nrow = length(x), 
                                                ncol = length(x)))
   sigma            <- by(data.full$sd.eff.size, data.full$study, 
                          function(x) tcrossprod(x))
   vee              <- by(data.full$var.eff.size, data.full$study, 
                          function(x) diag(x, nrow = length(x)))
-  SigmV            <- mapply(function(x, y) x - y,
-                             x = sigma, y = vee, SIMPLIFY = FALSE)
-  sumXWX           <- mapply(function(X, W) t(X) %*% W %*% X, 
-                             X = X, W = W, SIMPLIFY = FALSE)
-  sumXWy           <- mapply(function(X, W, y) t(X) %*% W %*% y, 
-                             X = X, W = W, y = y, SIMPLIFY = FALSE)
-  sumXWJWX         <- mapply(function(X, W, J) t(X) %*% W %*% J %*% W %*% X, 
-                             X = X, W = W, J = J, SIMPLIFY = FALSE)
-  sumXWVWX         <- mapply(function(X, W, V) t(X) %*% W %*% V %*% W %*% X, 
-                             X = X, W = W, V = vee, SIMPLIFY = FALSE)
-  sumXW.sig.m.v.WX <- mapply(function(X, W, V) t(X) %*% W %*% V %*% W %*% X, 
-                             X = X, W = W, V = SigmV, SIMPLIFY = FALSE)
-  sumXWX           <- Reduce("+", sumXWX)
-  sumXWy           <- Reduce("+", sumXWy)
-  sumXWJWX         <- Reduce("+", sumXWJWX)
-  sumXWVWX         <- Reduce("+", sumXWVWX)
-  sumXW.sig.m.v.WX <- Reduce("+", sumXW.sig.m.v.WX)
+  SigmV            <- Map(function(sigma, V) 
+                          sigma - V, sigma, vee)
+  sumXWX           <- Reduce("+", Map(function(X, W) 
+                                      t(X) %*% W %*% X, 
+                                      X, W))
+  sumXWy           <- Reduce("+", Map(function(X, W, y) 
+                                      t(X) %*% W %*% y, 
+                                      X, W, y))
+  sumXWJWX         <- Reduce("+", Map(function(X, W, J) 
+                                      t(X) %*% W %*% J %*% W %*% X, 
+                                      X, W, J))
+  sumXWVWX         <- Reduce("+", Map(function(X, W, V) 
+                                      t(X) %*% W %*% V %*% W %*% X, 
+                                      X, W, vee))
+  sumXW.sig.m.v.WX <- Reduce("+", Map(function(X, W, V) 
+                                      t(X) %*% W %*% V %*% W %*% X, 
+                                      X, W, SigmV))
   
-  switch(modelweights,
+  switch(modelweights, 
     
-    HIER = { # Values needed for hierarchical effects model.
+    HIER = { # Begin HIER
         
-        tr.sumJJ <- mapply(function(J) sum(diag(J %*% J)), 
-                           J = J, SIMPLIFY = FALSE) 
-        sumXJX   <- mapply(function(X, J) t(X) %*% J %*% X, 
-                           X = X, J = J, SIMPLIFY = FALSE)
-        sumXWJJX <- mapply(function(X, W, J) t(X) %*% W %*% J %*% J %*% X, 
-                           X = X, W = W, J = J, SIMPLIFY = FALSE)
-        sumXJJWX <- mapply(function(X, W, J) t(X) %*% J %*% J%*% W %*% X, 
-                           X = X, W = W, J = J, SIMPLIFY = FALSE)
-        sumXWWX  <- mapply(function(X, W) t(X) %*% W %*% W %*% X, 
-                           X = X, W = W, SIMPLIFY = FALSE)
-        sumXJWX  <- mapply(function(X, W, J) t(X) %*% J %*% W %*% X, 
-                           X = X, W = W, J = J, SIMPLIFY = FALSE)
-        sumXWJX  <- mapply(function(X, W, J) t(X) %*% W %*% J %*% X, 
-                           X = X, W = W, J = J, SIMPLIFY = FALSE)
-        tr.sumJJ <- Reduce("+", tr.sumJJ)   
-        sumXJX   <- Reduce("+", sumXJX) 
-        sumXWJJX <- Reduce("+", sumXWJJX) 
-        sumXJJWX <- Reduce("+", sumXJJWX) 
-        sumXWWX  <- Reduce("+", sumXWWX) 
-        sumXJWX  <- Reduce("+", sumXJWX) 
-        sumXWJX  <- Reduce("+", sumXWJX) 
-    }
+        tr.sumJJ <- Reduce("+", Map(function(J) 
+                                    sum(diag(J %*% J)), 
+                                    J)) 
+        sumXJX   <- Reduce("+", Map(function(X, J) 
+                                    t(X) %*% J %*% X, 
+                                    X, J))
+        sumXWJJX <- Reduce("+", Map(function(X, W, J) 
+                                    t(X) %*% W %*% J %*% J %*% X, 
+                                    X, W, J))
+        sumXJJWX <- Reduce("+", Map(function(X, W, J) 
+                                    t(X) %*% J %*% J %*% W %*% X, 
+                                    X, W, J))
+        sumXWWX  <- Reduce("+", Map(function(X, W) 
+                                    t(X) %*% W %*% W %*% X, 
+                                    X, W))
+        sumXJWX  <- Reduce("+", Map(function(X, W, J) 
+                                    t(X) %*% J %*% W %*% X, 
+                                    X , W, J))
+        sumXWJX  <- Reduce("+", Map(function(X, W, J) 
+                                    t(X) %*% W %*% J %*% X, 
+                                    X, W, J))
+    } # End HIER
+    
   ) 
   
-  b              <- solve(sumXWX)%*%sumXWy 
-  Xreg           <- data.matrix(X.full[-c(1)])
-  dimnames(Xreg) <- NULL
-  data.full$pred <- Xreg%*%b 
+  b              <- solve(sumXWX) %*% sumXWy 
+  Xreg           <- as.matrix(X.full[-c(1)], dimnames = NULL)
+  data.full$pred <- Xreg %*% b 
   data.full$e    <- data.full$effect.size - data.full$pred 
   
-  
-  if (!user.weighting) { 
+  if (!user_weighting) { 
     
-  switch(modelweights,
+  switch(modelweights, 
     
-    HIER = { # Hierarchical Effects
+    HIER = { # Begin HIER
+      
       # Sigma_aj = tau.sq * J_j + omega.sq * I_j + V_j 
-     
       # Qe is sum of squares 1
       # Qe = Sigma(T'WT)-(Sigma(T'WX)(Sigma(X'WX))^-1(Sigma(X'WT)
       # where W = V^(-1) and V = data.full$var.eff.size
       # Also, Qe = (y-xb)' W (y-xb)
       sumV <- sum(data.full$var.eff.size)
-      W    <- diag(1/data.full$var.eff.size) 
+      W    <- diag(1 / data.full$var.eff.size) 
       sumW <- sum(W)
       Qe   <- t(data.full$e) %*% W %*% data.full$e
      
@@ -628,10 +615,7 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
       # where B.hat = (X'WX)^-1(X'WT)
       # Also, Qa = (y-xb)'A (y-xb), A=diag(J)
       e      <- by(data.full$e, data.full$study, function(x) matrix(x))
-      sumEJE <- mapply(function(e, J) 
-                       t(e) %*% J %*% e, 
-                       e = e, J = J, SIMPLIFY = FALSE)
-      sumEJE <- Reduce("+", sumEJE) 
+      sumEJE <- Reduce("+", Map(function(e, J) t(e) %*% J %*% e, e, J))
       Qa     <- sumEJE 
       
       # MoM estimators for tau.sq and omega.sq can be written as
@@ -649,355 +633,325 @@ robu     <-function(formula, data, studynum,var.eff.size, userweights,
       #                    tr(V*[Sigma(t(Xj)*Jj*Xj)]*V*Sigma(t(Xj)*Wj^2*Xj)) 
       # C1 = tr(W^-1)    - tr(V*Sigma(t(X)*Jj*Xj))
       
-      A1    <- tr.sumJJ  - sum(diag(V.i%*%sumXJJWX)) - 
-                           sum(diag(V.i%*%sumXWJJX)) + 
-                           sum(diag(V.i%*%sumXJX%*%V.i%*%sumXWJWX))
+      A1    <- tr.sumJJ  - sum(diag(V.i %*% sumXJJWX)) - 
+                           sum(diag(V.i %*% sumXWJJX)) + 
+                           sum(diag(V.i %*% sumXJX %*% V.i %*% sumXWJWX))
+      
       B1    <- length(data.full$study) -
-                           sum(diag(V.i%*%sumXWJX)) -
-                           sum(diag(V.i%*%sumXJWX)) +
-                           sum(diag(V.i%*%sumXJX%*%V.i%*%sumXWWX))
-
-      C1    <- sumV      - sum(diag(V.i%*%sumXJX))
+                           sum(diag(V.i %*% sumXWJX)) -
+                           sum(diag(V.i %*% sumXJWX)) +
+                           sum(diag(V.i %*% sumXJX%*%V.i %*% sumXWWX))
+      C1    <- sumV - sum(diag(V.i %*% sumXJX))
      
       # A2 = tr(W) - tr(V*Sigma(t(X)*Wj*Jj*Wj*Xj))
       # B2 = tr(W) - tr(V*Sigma(t(X)*Wj^2*Xj))
       # C2 = Sigma(kj-p)
-      #
-      A2   <- sumW - sum(diag(V.i%*%sumXWJWX)) 
-      B2   <- sumW - sum(diag(V.i%*%sumXWWX)) 
-      C2   <- length(data.full$study) - (p+1) 
-      #
+      
+      A2   <- sumW - sum(diag(V.i %*% sumXWJWX)) 
+      B2   <- sumW - sum(diag(V.i %*% sumXWWX)) 
+      C2   <- length(data.full$study) - (p + 1) 
+      
       # MoM estimator for omega.sq.h = A2(Qa-C1)-A1(Qe-C2) / B1A2-B2A1
       # Estimate of between-studies-wthin-cluster variance component
-      omega.sq1  <- ((Qa-C1) * A2 - (Qe - C2) * A1)/(B1 * A2 - B2 * A1)
+      omega.sq1  <- ((Qa - C1) * A2 - (Qe - C2) * A1) / (B1 * A2 - B2 * A1)
       omega.sq   <- ifelse(omega.sq1 < 0, 0, omega.sq1)
-      #
+      
       # MoM estimators for tau.sq: Qe-C2/A2 - omega.sq.h(B2/A2)
       # Estimate of between-clusters variance component 
-      tau.sq1  <- ((Qe - C2)/A2) - omega.sq  *(B2/A2)
-      tau.sq   <- ifelse(tau.sq1 < 0, 0, tau.sq1)
+      tau.sq1  <- ((Qe - C2) / A2) - omega.sq  * (B2 / A2)
+      tau.sq   <- ifelse(tau.sq1 < 0, 0, tau.sq1) 
 
       # Approximate inverse variance weights
-      data.full$r.weights <- (1/(data.full$var.eff.size + tau.sq + omega.sq))
+      data.full$r.weights <- (1 / (data.full$var.eff.size + tau.sq + omega.sq))
+  
+      # Model info list for hierarchical effects
+      mod_info            <- list(omega.sq = omega.sq, tau.sq = tau.sq)
 
     }, # End HIER
          
-    CORR = { # Correlated Effects
+    CORR = { # Begin CORR
       
-      W    <- diag (data.full$weights) 
-      sumW <- sum(data.full$weights) # Sum (k.j*w.j)
-      Qe   <- t(data.full$e)%*%W%*%data.full$e 
+      W       <- diag (data.full$weights) 
+      sumW    <- sum(data.full$weights) # Sum (k.j*w.j)
+      Qe      <- t(data.full$e) %*% W %*% data.full$e 
       
       # The following components (denom, termA, termB, term1, term2)
       # are used in the calculation of the estimate of the residual 
       # variance component tau.sq.hat. 
       # Note: The effect of correlation on the estimates occurs entirely 
       # through the rho*term2 component.
-      denom   <- sumW - sum(diag(solve(sumXWX)%*%sumXWJWX)) 
-      termA   <- sum(diag(solve(sumXWX)%*%sumXWVWX))
-      termB   <- sum(diag(solve(sumXWX)%*%sumXW.sig.m.v.WX ))
-      term1   <- (Qe - N + termA) /denom 
+      
+      denom   <- sumW - sum(diag(solve(sumXWX) %*% sumXWJWX)) 
+      termA   <- sum(diag(solve(sumXWX) %*% sumXWVWX))
+      termB   <- sum(diag(solve(sumXWX) %*% sumXW.sig.m.v.WX ))
+      term1   <- (Qe - N + termA) / denom 
       term2   <- termB / denom 
-      tau.sq1 <- term1 + rho*term2 
+      tau.sq1 <- term1 + rho * term2 
       tau.sq  <- ifelse(tau.sq1 < 0, 0, tau.sq1)
-      df      <- N - termA - rho*(termB) # Fixed
-      I.2.1 <- ((Qe - df)/Qe) * 100
-      I.2 <- ifelse(I.2.1 < 0, 0, I.2.1)
+      df      <- N - termA - rho * (termB) 
+      I.2.1   <- ((Qe - df) / Qe) * 100
+      I.2     <- ifelse(I.2.1 < 0, 0, I.2.1)
       
       # Approximate inverse variance weights
-      data.full$r.weights <- 1/(data.full$k * 
+      data.full$r.weights <- 1 / (data.full$k * 
                              (data.full$avg.var.eff.size + tau.sq))
       
-    }    
-  ) # End Switch
+      # Model info list for correlated effects
+      mod_info            <- list(rho = rho, I.2 = I.2, tau.sq = tau.sq,
+                                  term1 = term1, term2 = term2)
+      
+    } # End CORR 
+    
+  ) 
   
-  } else {
+  } else { # Begin userweights
   
     data.full$r.weights <- data.full$userweights
     
-  }
+    # Model info list for userweights
+    mod_info            <- list(k = k, N = N, p = p, M = M)
+    
+  } # End userweights
   
-  W.r              <- by(data.full$r.weights, data.full$study, 
+  W.r.big          <- diag(data.full$r.weights)  # W
+  W.r              <- by(data.full$r.weights, data.full$study, # Wj
                          function(x) diag(x, nrow = length(x)))
-  sumXWX.r         <- mapply(function(X,W) t(X) %*% W %*% X, 
-                             X=X, W=W.r, 
-                             SIMPLIFY = FALSE)
-  sumXWy.r         <- mapply(function(X,W,y) t(X) %*% W %*% y, 
-                             X=X, W=W.r, y=y, 
-                             SIMPLIFY = FALSE)
-  sumXWX.r         <- Reduce("+", sumXWX.r)
-  sumXWy.r         <- Reduce("+", sumXWy.r)
-  b.r              <- solve(sumXWX.r)%*%sumXWy.r # Robust betas
-  
-  data.full$pred.r <- Xreg%*%b.r
+  sumXWX.r         <- Reduce("+", Map(function(X, W) 
+                                      t(X) %*% W %*% X, 
+                                      X, W.r))
+  sumXWy.r         <- Reduce("+", Map(function(X, W, y) 
+                                      t(X) %*% W %*% y, 
+                                      X, W.r, y))
+  b.r              <- solve(sumXWX.r) %*% sumXWy.r 
+  data.full$pred.r <- Xreg %*% b.r
   data.full$e.r    <- cbind(data.full$effect.size) - data.full$pred.r
   data.full$e.r    <- as.numeric(data.full$e.r)
   sigma.hat.r      <- by(data.full$e.r, data.full$study, 
                          function(x) tcrossprod(x))
   
-  if (!small) {    # Begin Large-Sample (Hedges, et al., 2010)
+  if (!small) { # Begin small = FALSE
     
-    adjusted    <- 0
-    sumXWeeWX.r <- mapply(function(X,W,V) t(X) %*% W %*% V %*% W %*% X, 
-                          X = X, W = W.r, V = sigma.hat.r, 
-                          SIMPLIFY = FALSE)
-    sumXWeeWX.r <- Reduce("+", sumXWeeWX.r)   
-    VR.r        <- solve(sumXWX.r) %*% sumXWeeWX.r %*% solve(sumXWX.r)  
+    sumXWeeWX.r  <- Reduce("+", Map(function(X, W, V) 
+                                    t(X) %*% W %*% V %*% W %*% X, 
+                                    X, W.r, sigma.hat.r))
+    
+    VR.r         <- solve(sumXWX.r) %*% sumXWeeWX.r %*% solve(sumXWX.r)  
+    SE           <- sqrt(diag(VR.r)) * sqrt(N / (N - (p + 1)))
+    t            <- b.r / SE
+    dfs          <- N - (p + 1)
+    prob         <- 2 * (1 - pt(abs(t), dfs))
+    CI.L         <- b.r - qt(.975, dfs) * SE
+    CI.U         <- b.r + qt(.975, dfs) * SE
+    
+  } else { # Begin small = TRUE
 
-    SE          <- sqrt(diag(VR.r)) * sqrt(N/(N-(p+1)))
-    t           <- b.r/SE
-    prob        <- 2 * (1 - pt(abs(t), df = N-(p+1)))
-    CI.L        <- b.r - qt(.975, N-(p+1)) * SE
-    CI.U        <- b.r + qt(.975, N-(p+1)) * SE
+    Q             <- solve(sumXWX.r) # Q = (X'WX)^(-1)
+    Q.list        <- rep(list(Q), N)
+    H             <- Xreg %*% Q %*% t(Xreg) %*% W.r.big # H = X * Q * X' * W
+    ImH           <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) - H
+    data.full$ImH <- cbind(ImH)
+    ImHj          <- by(data.full$ImH, data.full$study, 
+                        function(x) as.matrix(x))
+    diag_one      <- by(rep(1, M), X.full$study, 
+                                   function(x) diag(x, nrow = length(x)))
+    ImHii         <- Map(function(X, Q, W, D) 
+                         D - X %*% Q %*% t(X) %*% W,
+                         X, Q.list, W.r, diag_one)
     
-  
-  } else { # Begin Small-Sample Corrections (Tipton, 2013)
-
-    adjusted <- 1 # Fix this.
-    Q        <- solve(sumXWX.r)
-    W.r.des  <- diag(data.full$r.weights)
-    ImH      <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) - 
-                Xreg %*% Q %*% t(Xreg) %*% W.r.des
-    dfS      <- c(rep(0,p+1))
-    diagOnes <- by(rep(1,nrow(X.full)), X.full$study, 
-                   function(x) diag(x, nrow = length(x)))
-    Q.list   <- rep(list(Q), N)
-    ImHii    <- mapply(function(X, Q, W, D) D - X %*% Q %*% t(X) %*% W,
-                    X = X, Q = Q.list, W = W.r, D = diagOnes, SIMPLIFY = FALSE)
+    if (!user_weighting){
     
-    
-    if (!user.weighting){
-    
-    switch(modelweights,
+    switch(modelweights, 
       
       HIER = { # Begin HIER
         
-        inside   <- mapply(function(W, I) 
-                           solve(sqrt(W)) %*% I %*% solve(sqrt(W)^3),
-                           I = ImHii, W = W.r, SIMPLIFY = FALSE)
-        I        <- inside
-        eigenvec <- lapply(inside, function(x) eigen(x)$vectors) 
-        eigenval <- lapply(inside, function(x) eigen(x)$values)
+         # inside = Wj^(-1/2) * (I-Hjj) * Wj^(-3/2)
+         inside   <- Map(function(W, I) 
+                         solve(sqrt(W)) %*% I %*% solve(sqrt(W)^3),
+                         W.r, ImHii)
+         I        <- inside
+         eigenvec <- lapply(inside, function(x) eigen(x)$vectors) 
+         eigenval <- lapply(inside, function(x) eigen(x)$values)
         
       }, # End HIER
       
       CORR = { # Begin CORR
-        
-        eigenvec <- lapply(ImHii, function(x) eigen(x)$vectors) 
-        eigenval <- lapply(ImHii, function(x) eigen(x)$values)
-        I        <- ImHii
+      
+         eigenvec <- lapply(ImHii, function(x) eigen(x)$vectors) 
+         eigenval <- lapply(ImHii, function(x) eigen(x)$values)
+         I        <- ImHii
         
       } # End CORR
            
-    ) # End switch
+    ) 
     
-    } else {
+    } else { # Begin userweights
 
-        V.big     <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) %*% 
-                     diag(data.full$avg.var.eff.size)
-        v.j       <- by(data.full$avg.var.eff.size, data.full$study, 
-                       function(x) diag(x, nrow = length(x)))
-        v.j.sqrt  <- lapply(v.j, function (x) sqrt(x))
-        V.j       <- mapply(function(V, D) V %*% V,
-                            D = diagOnes, V = v.j, SIMPLIFY = FALSE)
+        V.big        <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) %*% 
+                        diag(data.full$avg.var.eff.size)
+        V.big.list   <- rep(list(V.big), N)
+        v.j          <- by(data.full$avg.var.eff.size, data.full$study, 
+                           function(x) diag(x, nrow = length(x)))
+        v.j.sqrt     <- lapply(v.j, function (x) sqrt(x))
+        inside       <- Map(function(V, I) 
+                            I  %*% V %*% t(I),
+                            V.big.list, ImHj)
+        eigenvec     <- lapply(inside, function(x) eigen(x)$vectors)
+        eigenval     <- lapply(inside, function(x) eigen(x)$values)
+        I            <- inside
         
-        inside    <- mapply(function(V, I) I  %*%V %*% I,
-                            I = ImHii, V = V.j, SIMPLIFY = FALSE)
-
-        eigenvec <- lapply(inside, function(x) eigen(x)$vectors) 
-        eigenval <- lapply(inside, function(x) eigen(x)$values)
-        I        <- inside
-        
-      }
+      } # End userweights
     
-    A.MBB    <- mapply(function (eigenvec, eigenval, kl) 
-                       eigenvec %*% diag(1/sqrt(eigenval), kl, kl) %*% 
-                       t(eigenvec),
-                       eigenvec = eigenvec, eigenval = eigenval, kl = kl, 
-                       SIMPLIFY = FALSE)
+    A.MBB  <- Map(function (eigenvec, eigenval, k_list) 
+                  eigenvec %*% 
+                    diag(1/sqrt(eigenval), k_list, k_list) %*% t(eigenvec),
+                  eigenvec, eigenval, k_list)
+    A.MBB1 <- Map(function(K, A, I) 
+                  if (K > 1) A else matrix(sqrt(solve(I))), 
+                  k_list, A.MBB, I)
     
-    A.MBB1   <- mapply(function(K, A, I) if (K > 1) A 
-                      else matrix(sqrt(solve(I))), 
-                      K = kl, I = I, A = A.MBB, 
-                      SIMPLIFY = FALSE)
-    
-    if (!user.weighting){
+    if (!user_weighting){
       
-    switch(modelweights,
+    switch(modelweights, 
            
      HIER = { # Begin HIER
         
-        A.MBB2                <- mapply(function(W, A) 
-                                        solve(sqrt(W)) %*% A %*% solve(sqrt(W)),
-                                        A = A.MBB1, W = W.r, SIMPLIFY = FALSE) 
-
-        sumXWA.MBBeeA.MBBWX.r <- mapply(function(X,W,A,S) 
-                                        t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                        X = X, W = W.r, A = A.MBB2, 
-                                        S = sigma.hat.r, SIMPLIFY = FALSE)
+        A.MBB2                <- Map(function(W, A) 
+                                     solve(sqrt(W)) %*% A %*% solve(sqrt(W)),
+                                     W.r, A.MBB1) 
+        sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
+                                     t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
+                                     X, W.r, A.MBB2, sigma.hat.r)
       }, # End HIER
       
       CORR = { # Begin CORR
         
-        A.MBB2                <- A.MBB1 
-        sumXWA.MBBeeA.MBBWX.r <- mapply(function(X,W,A,S) 
-                                        t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                        X = X, W = W.r, A = A.MBB2, 
-                                        S = sigma.hat.r, 
-                                        SIMPLIFY = FALSE)
+        A.MBB2                <- A.MBB1
+        sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
+                                     t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
+                                     X, W.r, A.MBB2, sigma.hat.r)
       } # End CORR
            
-    ) # End switch 
+    ) 
     
-    } else {
+    } else { # Begin userweights
         
-        A.MBB2                <- mapply(function(V, A) 
-                                        V %*% A,
-                                        A = A.MBB1, V = v.j.sqrt, 
-                                        SIMPLIFY = FALSE) 
-        
-        sumXWA.MBBeeA.MBBWX.r <- mapply(function(X,W,A,S) 
-                                        t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                        X = X, W = W.r, A = A.MBB2, 
-                                        S = sigma.hat.r, SIMPLIFY = FALSE)
-      }
+        A.MBB2                <- Map(function(V, A) 
+                                     V %*% A,
+                                     v.j.sqrt, A.MBB1) 
+        sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
+                                     t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
+                                     X, W.r, A.MBB2, sigma.hat.r)
+      } # End userweights
     
     sumXWA.MBBeeA.MBBWX.r <- Reduce("+", sumXWA.MBBeeA.MBBWX.r) 
-    data.full$ImH         <- ImH
-    ImH                   <- lapply(split(data.full$ImH, data.full$study), 
-                                    matrix, ncol=nrow(data.full))
-    giTemp                <- mapply(function(I, A, W, X, Q)
-                                    t(I) %*% A %*% W %*% X %*% Q, 
-                                    I = ImH, A = A.MBB2, W = W.r, X = X, 
-                                    Q = Q.list, 
-                                    SIMPLIFY = FALSE) 
+    giTemp                <- Map(function(I, A, W, X, Q)
+                                 t(I) %*% A %*% W %*% X %*% Q, 
+                                 ImHj, A.MBB2, W.r, X, Q.list)
    
-    dfs <- c(rep(0,p+1))
+    dfs <- c(rep(0, p + 1))
+    
       for (i in 1:(p+1)) { 
+        
         L      <- c(rep(0,p+1))
         L[i]   <- 1
         Ll     <- rep(list(L), N)
-        G      <- 0
-        gi     <- mapply(function(G,L) G %*% cbind(L), 
-                         G = giTemp, L = Ll, SIMPLIFY = FALSE)
-        G      <- lapply(gi, function(x) tcrossprod(x))
-        G      <- Reduce("+", G)
-        if (!user.weighting){
-          switch(modelweights,
-            HIER = {B <- solve(sqrt(W.r.des))%*% G %*% solve(sqrt(W.r.des))},
-            CORR = {B <- solve(sqrt(W.r.des))%*% G %*% solve(sqrt(W.r.des))}
-          )
-        } else {
-                    B <- solve(sqrt(V.big))%*% G %*% solve(sqrt(V.big)) 
-        }
+        gi     <- Map(function(G, L) G %*% cbind(L), giTemp, Ll)
+        G      <- Reduce("+", lapply(gi, function(x) tcrossprod(x)))
+        
+        if (!user_weighting){
+          
+          switch(modelweights, 
+                 
+            HIER = { # Begin HIER
+              
+              B <- solve(sqrt(W.r.big) )%*% G %*% solve(sqrt(W.r.big))
+              
+            }, # End HIER
+            
+            CORR = { # Begin CORR
+              
+              B <- solve(sqrt(W.r.big) )%*% G %*% solve(sqrt(W.r.big))
+              
+            } # End CORR
+            
+          ) 
+          
+        } else { # Begin userweights
+          
+            B <- solve(sqrt(V.big) )%*% G %*% solve(sqrt(V.big)) 
+            
+        } # End userweights
+        
         e.val2 <- eigen(B)
         dfs[i] <- sum(e.val2$values)^2/sum(e.val2$values^2)
-      }
+        
+      } # End loop
     
-    VR.MBB1 <- solve(sumXWX.r)%*%sumXWA.MBBeeA.MBBWX.r%*%solve(sumXWX.r)
+    VR.MBB1 <- solve(sumXWX.r) %*% sumXWA.MBBeeA.MBBWX.r %*% solve(sumXWX.r)
     VR.r    <- VR.MBB1
-
     SE      <- sqrt(diag(VR.r))
-    t       <- b.r/SE
+    t       <- b.r / SE
     prob    <- 2 * (1 - pt(abs(t), df = dfs)) 
     CI.L    <- b.r - qt(.975, dfs) * SE
     CI.U    <- b.r + qt(.975, dfs) * SE
-  }
+    
+  } # End small = TRUE
+        
+    reg_table           <- data.frame(cbind(b.r, SE, t, dfs, prob, CI.L, CI.U))
+    names(X.full)[2]    <- "intercept"
+    labels              <- c(colnames(X.full[2:length(X.full)]))
+    sig                 <- ifelse(prob < .01, "***", 
+                           ifelse(prob > .01 & prob < .05, "**",
+                           ifelse(prob > .05 & prob < .10, "*", "")))
+    reg_table           <- cbind(labels, reg_table, sig)
+    colnames(reg_table) <- c("labels", "b.r", "SE", "t", "dfs", "prob", "CI.U", 
+                             "CI.L", "sig")
   
-    names(X.full)[2] <- "intercept"
-    labels           <- c(colnames(X.full[2:length(X.full)]))
-    labels           <- format(labels, justify = "left")
-    b.r              <- format(b.r,digits=3, justify="centre")
-    SE               <- format(SE, digits=3, justify="centre")
-    t                <- format(t, digits=3, justify="centre")
-    prob             <- format(prob, digits=3, 
-                               scientific = FALSE, justify="centre")
-    sig              <- ifelse(prob < .01, "***", 
-                        ifelse(prob > .01 & prob < .05, "**",
-                        ifelse(prob > .05 & prob < .10, "*", "")))
-    CI.L             <- format(CI.L, digits=3, 
-                               scientific = FALSE, justify="centre")
-    CI.U             <- format(CI.U, digits=3, 
-                               scientific = FALSE, justify="centre")
+   if (!small) { # Begin small = FALSE
+ 
+      mod_label_sm   <- ""
+      mod_notice     <- ""
+      
+   } else { # Begin small = TRUE
+     
+      mod_label_sm  <- "with Small-Sample Corrections"            
+      mod_notice    <- "Note: If df < 4, do not trust the results"
+    
+   } # End small = TRUE
+       
   
-  if (!small) { # Begin Large Sample (Hedges et al., 2010)
-    
-    
-    output            <- data.frame(cbind(labels,b.r,SE,t,prob,CI.L,CI.U, sig))
-    colnames(output)  <- c("", "Estimate","StdErr", "t-value", "P(|t|>)", 
-                          "95% CI.L","95% CI.U", "Sig")
-    model.lab2        <- ""
-    notice            <- ""
-    
+   if (!user_weighting) {
   
-  } else { # Begin Small-Samples Correction Tipton (2013)
-    
-    dfs.SW           <- format(dfs, digits=3, 
-                               scientific=FALSE, justify = "centre")
-    output           <- data.frame(cbind(labels, b.r, SE, t, dfs.SW, prob, 
-                                         CI.L, CI.U, sig))
-    colnames(output) <- c("", "Estimate","StdErr","t-value","df","P(|t|>)",
-                          "95% CI.L","95% CI.U", "Sig")
-    model.lab2       <- "with Small-Sample Corrections"            
-    notice           <- "Note: If df < 3, do not trust the results"
-    
-  }
+     switch(modelweights,
+           
+       HIER = { # Begin HIER
+             
+          mod_label <- c("RVE: Hierarchical Effects Model", mod_label_sm)
 
-  k        <- unlist(kl)
-  min.k    <- min(k)
-  max.k    <- max(k)
-  mean.k   <- mean(k)
-  mean.k   <- format(mean.k, digits=3)
-  median.k <- median(k)
-  
-  if (!user.weighting) {
-  
-  switch(modelweights,
+        }, # End HIER
          
-    HIER = {
-      I.2   <- NA
-      term1 <- NA
-      term2 <- NA
-      model.lab1 <- "RVE: Hierarchical Effects Model"
-      model.lab  <- c(model.lab1, model.lab2)
-    },
+        CORR = { # Begin CORR
+             
+          mod_label <- c("RVE: Correlated Effects Model", mod_label_sm)
+             
+        } # End CORR
+           
+     ) 
          
-    CORR = {
-      omega.sq   <- NA
-      model.lab1 <- "RVE: Correlated Effects Model"
-      model.lab  <- c(model.lab1, model.lab2)
-    }
-  )
-  } else {
-    omega.sq <- NA
-    tau.sq   <- NA
-    I.2      <- NA
-    term1    <- NA
-    term2    <- NA
-    Qe       <- NA
-    term1    <- NA
-    term2    <- NA
-    model.lab1 <- "RVE: User Specified Weights"
-    model.lab  <- c(model.lab1, model.lab2)
-  }
+   } else { # Begin userweights
 
-  res <- list( data.full = data.full, X.full = X.full, output = output, 
-               rho = rho, min.k = min.k, mean.k = mean.k, median.k = 
-               median.k, max.k = max.k, I.2 = I.2, tau.sq = tau.sq, 
-               omega.sq = omega.sq, coefficients = b, predicted = 
-               data.full$pred, residuals = data.full$e, p = p, effect.sizes = 
-               data.full$effect.size, robust.coefficients = b.r, 
-               robust.predicted = data.full$pred.r, n = N, k = sum(k), 
-               QE = Qe, robust.residuals = data.full$e.r, robust.varcov = VR.r, 
-               ml = ml, weights = data.full$weights, r.weights = 
-               data.full$r.weights, studynum = data.full$studynum, 
-               model.lab = model.lab, notice = notice, modelweights = 
-               modelweights, kl = kl, avg.var = data.full$avg.var.eff.size,
-               X = X, y = y, Xreg = Xreg, term1 = term1, term2 = term2, 
-               labels = labels, SE = SE, adjusted = adjusted, mf = mf,
-               user.weighting = user.weighting, data = data, model.lab1 = 
-               model.lab1, call = sys.call(), CI.L = CI.L, CI.U = CI.U)
+     mod_label <- c("RVE: User Specified Weights", mod_label_sm)
+         
+   } # End userweights
 
+  res <- list(data.full = data.full, X.full = X.full, reg_table = reg_table, 
+              mod_label = mod_label, mod_notice = mod_notice, modelweights = 
+              modelweights, mod_info = mod_info, user_weighting = 
+              user_weighting, ml = ml, cl = cl, N = N, M = M, k = k, 
+              k_list = k_list, p = p, X = X, y = y, Xreg = Xreg, b.r = b.r, 
+              VR.r = VR.r, dfs = dfs, small = small, data = data, labels = 
+              labels)
+               
   class(res) <- "robu"
   res
 }
