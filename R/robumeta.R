@@ -12,15 +12,15 @@ forest.robu <- function(x, es.lab, study.lab, ...){
   n_rows          <- M + (2 * N) + 4
   data            <- as.data.frame(x$data) 
   data.full       <- as.data.frame(x$data.full) 
+  data$orig.study <- as.factor(x$study_orig_id)
+  data            <- data[order(data$orig.study),]            
   data$r.weights  <- data.full$r.weights 
   data$study.num  <- data.full$study 
-
-  add_col_titles      <- as.list(names(ellipsis)) # user supplied titles
-  add_col_values      <- as.list(data[, unlist(ellipsis, use.names = FALSE)]) 
-  id_col_title        <- "Studies" 
+  add_col_titles  <- as.list(names(ellipsis)) # user supplied titles
+  add_col_values  <- as.list(data[, unlist(ellipsis, use.names = FALSE)]) 
+  id_col_title    <- "Studies" 
   id_col_study_values <- unique(data[,study.lab]) 
   id_col_es_values    <- as.character(data[,es.lab]) 
-
   data$obs_num    <- seq(1, M)
   data$study_num  <- data$study.num 
   data$es_rows    <- as.numeric(data$obs_num + (2 * data$study_num) + 1) 
@@ -29,7 +29,6 @@ forest.robu <- function(x, es.lab, study.lab, ...){
   study_rows      <- unique(data$study_rows) 
   total_row       <- max(n_rows)
   title_row       <- min(n_rows)
-
   data_col_values <- data[, c("r.weights", "effect.size", "var.eff.size")]
   data_col_values <- cbind(data_col_values, es_rows)
   grand.ES        <- reg_table$b.r
@@ -90,9 +89,14 @@ forest.robu <- function(x, es.lab, study.lab, ...){
                 ES = ES, min = min, max = max, range = range)) 
   }
 
-  if (n_user_cols > 0){
+  if (n_user_cols > 1){
     add_col <- lapply(add_col_values, function(x) makeTextGrob(x, es_rows))
     add_col <- Map(function(x, y) addTitleToGrob(x, y), add_col, add_col_titles)
+  }
+  
+  if (n_user_cols == 1){
+    add_col <- makeTextGrob(add_col_values, es_rows)
+    add_col <- addTitleToGrob(add_col, add_col_titles)
   }
 
   id_col_study_grob <- makeTextGrob(id_col_study_values, study_rows, bold =TRUE)
@@ -166,13 +170,19 @@ forest.robu <- function(x, es.lab, study.lab, ...){
   cols           <- unit.c(id_col_width, gap_col, data_col_width, gap_col)
   
   add_col_widths <- c()
-  if (n_user_cols > 0){
+  if (n_user_cols > 1){
     for (i in 1:n_user_cols) {
       add_col_widths[[i]] <-  max(unit(rep(1, length(add_col[[i]]$values)), 
                                      "grobwidth", add_col[[i]]$values))
       cols <- unit.c(cols, add_col_widths[[i]])
       cols <- unit.c(cols, gap_col)
     }
+  }
+  if (n_user_cols == 1){
+      add_col_widths <-  max(unit(rep(1, length(add_col[1]$values)), 
+                                     "grobwidth", add_col[1]$values))
+      cols <- unit.c(cols, add_col_widths[1])
+      cols <- unit.c(cols, gap_col)
   }
 
   pushViewport(viewport(layout = grid.layout(n_rows, (4 + (2 * n_user_cols)),
@@ -195,9 +205,14 @@ forest.robu <- function(x, es.lab, study.lab, ...){
 
   drawLabelCol(id_col, 1)
   
-  if (n_user_cols > 0){
+  if (n_user_cols > 1){
     for (i in 1:n_user_cols) {
       drawLabelCol(add_col[[i]], ((i * 2) + 3))
+    }
+  }
+  if (n_user_cols == 1){
+    for (i in 1:n_user_cols) {
+      drawLabelCol(add_col, 5)
     }
   }
 
@@ -494,7 +509,7 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
                                                      "var.eff.size"), 
                                                    names(dframe))] 
   } # End userweights
-
+  study_orig_id            <- dframe$studynum
   dframe$study             <- as.factor(dframe$studynum)
   dframe$study             <- as.numeric(dframe$study)
   dframe                   <- dframe[order(dframe$study),]
@@ -950,7 +965,7 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
               user_weighting, ml = ml, cl = cl, N = N, M = M, k = k, 
               k_list = k_list, p = p, X = X, y = y, Xreg = Xreg, b.r = b.r, 
               VR.r = VR.r, dfs = dfs, small = small, data = data, labels = 
-              labels)
+              labels, study_orig_id = study_orig_id)
                
   class(res) <- "robu"
   res
