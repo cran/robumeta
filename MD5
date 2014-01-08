@@ -1,0 +1,17 @@
+2e2fd47a7f6e9899a4e0a26513f71609 *DESCRIPTION
+8b54e5a89fbda3af5e077053d40bec76 *NAMESPACE
+da943dcb38eaa5d5742b5a7dd0a8061e *R/robumeta.R
+b845f6875e649a767afdfee2c14f24aa *data/corrdat.RData
+7fc0597012e46bb085204cbcd56dd2ad *data/corrdat.sm.RData
+386a9e3ce12464b22df9a5aa7ed8ed28 *data/hedgesdat.RData
+6dfcd3b4df7a31766bee4b5a32636784 *data/hierdat.RData
+85b8c63b39eb84c212c99e0ca8828eb0 *man/corrdat.Rd
+575229b9183bc17e4c55f94b4c7f7679 *man/corrdat.sm.Rd
+c57401f2f52b7c69f63a517f85415c50 *man/group.center.Rd
+1acf40feca12360752ff7f3ae3f34176 *man/group.mean.Rd
+23d3482e11a4d0ec028a22bfc82605ec *man/hedgesdat.Rd
+8a594f08a49361befb1f3cc77a099bbe *man/hierdat.Rd
+41849e665c409c79f3a40233496f7977 *man/print.robu.Rd
+669d5d21d4edd23c3a993f8ea2e0c474 *man/robu.Rd
+fba99446d65a1b71456b7a9d01cdd38c *man/robumeta-package.Rd
+ac1fbc209fb8985b304444cf926bb2bb *man/sensitivity.Rd
