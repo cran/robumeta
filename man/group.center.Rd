@@ -19,7 +19,7 @@ covariate in question.}
 data(corrdat) 
 
 # Create a group centered covariate 
-age_c <- group.center(corrdat$age, corrdat$studynum)
+males_c <- group.center(corrdat$males, corrdat$studyid)
 
 }
 \keyword{robumeta}
