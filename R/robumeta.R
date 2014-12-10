@@ -379,7 +379,7 @@ mod_info       <- x$mod_info
 output              <- x$reg_table
 output              <- format(output, trim = TRUE, digits = digits, 
                               scientific = FALSE)
-colnames(output)    <- c("", "Estimate","StdErr", "t-value", "P(|t|>)", 
+colnames(output)    <- c("", "Estimate","StdErr", "t-value", "dfs", "P(|t|>)", 
                              "95% CI.L","95% CI.U", "Sig")
 
 if(!user_weighting){
