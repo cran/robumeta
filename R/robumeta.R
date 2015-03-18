@@ -14,7 +14,9 @@ forest.robu <- function(x, es.lab, study.lab, ...){
   data.full       <- as.data.frame(x$data.full) 
   data$orig.study <- as.factor(x$study_orig_id)
   data            <- data[order(data$orig.study),]            
-  data$r.weights  <- data.full$r.weights 
+  data$r.weights  <- data.full$r.weights
+  data$effect.size  <- data.full$effect.size
+  data$var.eff.size <- data.full$var.eff.size
   data$study.num  <- data.full$study 
   add_col_titles  <- as.list(names(ellipsis)) # user supplied titles
   add_col_values  <- as.list(data[, unlist(ellipsis, use.names = FALSE)]) 
