@@ -1,6 +1,11 @@
-e51862f0e7fdc86a57f230fc4666d09f *DESCRIPTION
-b6e72ddb6e0b8e7eebd11b395c92b793 *NAMESPACE
-07919765b8c8acb3f8fb3fb97319b50d *R/robumeta.R
+6ab7eca99fc9eca14cf54c7ecddfef6a *DESCRIPTION
+f6245a528dcfce758d412b57e28afb30 *NAMESPACE
+2138802c23f8f7cdf53d93b73f3cb708 *R/forest.robu.R
+bf2aa85e9a7eb0e08b7298f8b6432117 *R/group.center.R
+9eaae6b1c637cf412fc03ee6e60aa0d7 *R/group.mean.R
+6a75b84ce96aff0532c44a9c5175732f *R/print.robu.R
+3e41510452ac32669c8020593b7e8f9d *R/robu.R
+4a634b34bf77b26bcad687ddbbfae591 *R/sensitivity.R
 b845f6875e649a767afdfee2c14f24aa *data/corrdat.RData
 7fc0597012e46bb085204cbcd56dd2ad *data/corrdat.sm.RData
 386a9e3ce12464b22df9a5aa7ed8ed28 *data/hedgesdat.RData
