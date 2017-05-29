@@ -1,3 +1,99 @@
+#' Fitting Robust Variance Meta-Regression Models
+#' 
+#' \code{robu} is used to meta-regression models using robust variance
+#' estimation (RVE) methods. \code{robu} can be used to estimate correlated and
+#' hierarchical effects models using the original (Hedges, Tipton and Johnson,
+#' 2010) and small-sample corrected (Tipton, 2013) RVE methods. In addition,
+#' \code{robu} contains options for fitting these models using user-specified
+#' weighting schemes (see the Appendix of Tipton (2013) for a discussion of
+#' non- efficient weights in RVE).
+#' 
+#' 
+#' @aliases robu CORR HIER USER
+#' @param formula An object of class \code{"formula"}. A typical
+#' meta-regression formula will look similar to \code{y ~ x1 + x2...}, where
+#' \code{y} is a vector of effect sizes and \code{x1 + x2...} are (optional)
+#' user-specified covariates. An intercept only model can be specified with
+#' \code{y ~ 1} and the intercept can be ommitted as follows \code{y ~ -1
+#' +...}.
+#' @param data A data frame, list or environment or an object coercible by
+#' as.data.frame to a data frame.
+#' @param studynum A vector of study numbers to be used in model fitting.
+#' \code{studynum} must be a numeric or factor variable that uniquely
+#' identifies each study.
+#' @param var.eff.size A vector of user-calculated effect-size variances.
+#' @param rho User-specified within-study effect-size correlation used to fit
+#' correlated (\code{modelweights = "CORR"}) effects meta-regression models.
+#' The value of \code{rho} must be between 0 and 1. The default value for
+#' \code{rho} is 0.8.  \code{rho} is not specified for hierarchical
+#' (\code{modelweights = "HIER"}) effects models.
+#' @param modelweights User-specified model weighting scheme.  The two two
+#' avialable options are \code{modelweights = "CORR"} and \code{modelweights =
+#' "HIER"}.  The default is \code{"CORR"}. See Hedges, Tipton and Johnson
+#' (2010) and Tipton (2013) for extended explanations of each weighting scheme.
+#' @param userweights A vector of user-specified weights if non-efficient
+#' weights are of interest. Users interested in non-efficient weights should
+#' see the Appendix of Tipton (2013) for a discussion of the role of
+#' non-efficient weights in RVE).
+#' @param small \code{small = TRUE} is used to fit the meta-regression models
+#' with the small- sample corrections for both the residuals and degrees of
+#' freedom, as detailed in Tipton (2013). Users wishing to use the original RVE
+#' estimator must specify \code{small = FALSE} as the corrected estimator is
+#' the default option.
+#' @param ...  Additional arguments to be passed to the fitting function.
+#' @return
+#' 
+#' \item{output}{ A data frame containing some combination of the robust
+#' coefficient names and values, standard errors, t-test value, confidence
+#' intervals, degrees of freedom and statistical significance.  }
+#' 
+#' \item{n}{The number of studies in the sample \code{n}}.
+#' 
+#' \item{k}{The number of effect sizes in the sample \code{k}}.
+#' 
+#' \item{k descriptives}{the minimum \code{min.k}, mean \code{mean.k}, median
+#' \code{median .k}, and maximum \code{max.k} number of effect sizes per study.
+#' }
+#' 
+#' \item{tau.sq.}{ \code{tau.sq} is the between study variance component in the
+#' correlated effects meta-regression model and the between-cluster variance
+#' component in the hierarchical effects model. \code{tau.sq} is calculated
+#' using the method-of-moments estimator provided in Hedges, Tipton, and
+#' Johnson (2010).  For the correlated effects model the method-of-moments
+#' estimar depends on the user-specified value of rho.  }
+#' 
+#' \item{omega.sq.}{ \code{omega.sq} is the between-studies-within-cluster
+#' variance component for the hierarchical effects meta-regression model.
+#' \code{omega.sq} is calculated using the method-of-moments estimator provided
+#' in Hedges, Tipton, and Johnson (2010) erratum.  }
+#' 
+#' \item{I.2}{ \code{I.2} is a test statistics used to quantify the amount of
+#' variability in effect size estimates due to effect size heterogeneity as
+#' opposed to random variation.  }
+#' @references
+#' 
+#' Hedges, L.V., Tipton, E., Johnson, M.C. (2010) Robust variance estimation in
+#' meta-regression with dependent effect size estimates. \emph{Research
+#' Synthesis Methods}. \bold{1}(1): 39--65. Erratum in \bold{1}(2): 164--165.
+#' DOI: 10.1002/jrsm.5
+#' 
+#' Tipton, E. (in press) Small sample adjustments for robust variance
+#' estimation with meta-regression. \emph{Psychological Methods}.
+#' @keywords robu
+#' @examples
+#' 
+#' 
+#' # Load data
+#' data(hierdat)
+#' 
+#' # Small-Sample Corrections - Hierarchical Dependence Model
+#' HierModSm <-  robu(formula = effectsize ~ binge + followup + sreport
+#'                    + age, data = hierdat, studynum = studyid, 
+#'                    var.eff.size = var, modelweights = "HIER", small = TRUE)
+#' 
+#' print(HierModSm) # Output results
+#' 
+#' @export
 robu     <- function(formula, data, studynum,var.eff.size, userweights,
                      modelweights = c("CORR", "HIER"), rho = 0.8, 
                      small = TRUE, ...) {
@@ -27,7 +123,7 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
   if(!user_weighting){ 
     
     dframe                 <- data.frame(effect.size = mf[,1],
-                                        model.matrix(formula, mf),
+                                        stats::model.matrix(formula, mf),
                                         studynum = mf[["(studynum)"]],
                                         var.eff.size = mf[["(var.eff.size)"]])
     
@@ -39,7 +135,7 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
   } else { # Begin userweights
     
     dframe                 <- data.frame(effect.size = mf[,1],
-                                        model.matrix(formula, mf), 
+                                        stats::model.matrix(formula, mf), 
                                         studynum = mf[["(studynum)"]], 
                                         var.eff.size = mf[["(var.eff.size)"]],
                                         userweights = mf[["(userweights)"]])
@@ -56,7 +152,7 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
   dframe                   <- dframe[order(dframe$study),]
   k_temp                   <- as.data.frame(unclass(rle(sort(dframe$study))))
   dframe$k                 <- k_temp[[1]][ match(dframe$study, k_temp[[2]])]
-  dframe$avg.var.eff.size  <- ave(dframe$var.eff.size, dframe$study)
+  dframe$avg.var.eff.size  <- stats::ave(dframe$var.eff.size, dframe$study)
   dframe$sd.eff.size       <- sqrt(dframe$var.eff.size)
   
   switch(modelweights, 
@@ -86,7 +182,8 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
   p                <- ncol(X.full) - 2 # Number of (non-intercept) covariates 
   N                <- max(data.full$study) # Number of studies
   W                <- as.matrix(by(data.full$weights, data.full$study, 
-                                   function(x) diag(x, nrow = length(x))))
+                                   function(x) diag(x, nrow = length(x)),
+                                   simplify = FALSE))
   X                <- data.matrix(X.full)
   X                <- lapply(split(X[,2:(p + 2)], X[,1]), matrix, ncol = p + 1)
   y                <- by(data.full$effect.size, data.full$study, 
@@ -220,7 +317,9 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
       tau.sq   <- ifelse(tau.sq1 < 0, 0, tau.sq1) 
 
       # Approximate inverse variance weights
-      data.full$r.weights <- (1 / (data.full$var.eff.size + tau.sq + omega.sq))
+      data.full$r.weights <- (1 / (as.vector(data.full$var.eff.size) + 
+                                     as.vector(tau.sq) + 
+                                     as.vector(omega.sq)))
   
       # Model info list for hierarchical effects
       mod_info            <- list(omega.sq = omega.sq, tau.sq = tau.sq)
@@ -251,8 +350,9 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
       I.2     <- ifelse(I.2.1 < 0, 0, I.2.1)
       
       # Approximate inverse variance weights
-      data.full$r.weights <- 1 / (data.full$k * 
-                             (data.full$avg.var.eff.size + tau.sq))
+      data.full$r.weights <- 1 / (as.vector(data.full$k) * 
+                             (as.vector(data.full$avg.var.eff.size) + 
+                                as.vector(tau.sq)))
       
       # Model info list for correlated effects
       mod_info            <- list(rho = rho, I.2 = I.2, tau.sq = tau.sq,
@@ -297,9 +397,9 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
     SE           <- sqrt(diag(VR.r)) * sqrt(N / (N - (p + 1)))
     t            <- b.r / SE
     dfs          <- N - (p + 1)
-    prob         <- 2 * (1 - pt(abs(t), dfs))
-    CI.L         <- b.r - qt(.975, dfs) * SE
-    CI.U         <- b.r + qt(.975, dfs) * SE
+    prob         <- 2 * (1 - stats::pt(abs(t), dfs))
+    CI.L         <- b.r - stats::qt(.975, dfs) * SE
+    CI.U         <- b.r + stats::qt(.975, dfs) * SE
     
   } else { # Begin small = TRUE
 
@@ -313,102 +413,111 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
                    function(x){matrix(x, ncol =M)})
     #ImHj          <- by(data.full$ImH, data.full$study, 
     #                    function(x) as.matrix(x))
-                 
+        
+    
     diag_one      <- by(rep(1, M), X.full$study, 
-                                   function(x) diag(x, nrow = length(x)))
+                        function(x) diag(x, nrow = length(x)))
+    
     ImHii         <- Map(function(X, Q, W, D) 
-                         D - X %*% Q %*% t(X) %*% W,
-                         X, Q.list, W.r, diag_one)
+      D - X %*% Q %*% t(X) %*% W,
+      X, Q.list, W.r, diag_one)
+    
     
     if (!user_weighting){
-    
-    switch(modelweights, 
       
-      HIER = { # Begin HIER
-        
-         # inside = Wj^(-1/2) * (I-Hjj) * Wj^(-3/2)
-         inside   <- Map(function(W, I) 
-                         solve(sqrt(W)) %*% I %*% solve(sqrt(W)^3),
-                         W.r, ImHii)
-         I        <- inside
-         eigenvec <- lapply(inside, function(x) eigen(x)$vectors) 
-         eigenval <- lapply(inside, function(x) eigen(x)$values)
-        
-      }, # End HIER
-      
-      CORR = { # Begin CORR
-      
-         eigenvec <- lapply(ImHii, function(x) eigen(x)$vectors) 
-         eigenval <- lapply(ImHii, function(x) eigen(x)$values)
-         I        <- ImHii
-        
-      } # End CORR
-           
-    ) 
-    
-    } else { # Begin userweights
+      Working_Matrx_E <- diag(1/data.full$r.weights)  #1/W
+      Working_Matrx_E_j <- by(data.full$r.weights, data.full$study, # Wj
+                              function(x) diag(1/x, nrow = length(x))) #1/W_j
 
-        V.big        <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) %*% 
-                        diag(data.full$avg.var.eff.size)
-        V.big.list   <- rep(list(V.big), N)
-        v.j          <- by(data.full$avg.var.eff.size, data.full$study, 
-                           function(x) diag(x, nrow = length(x)))
-        v.j.sqrt     <- lapply(v.j, function (x) sqrt(x))
-        inside       <- Map(function(V, I) 
-                            I  %*% V %*% t(I),
-                            V.big.list, ImHj)
-        eigenvec     <- lapply(inside, function(x) eigen(x)$vectors)
-        eigenval     <- lapply(inside, function(x) eigen(x)$values)
-        I            <- inside
-        
-      } # End userweights
-    
-    A.MBB  <- Map(function (eigenvec, eigenval, k_list) 
-                  eigenvec %*% 
-                    diag(1/sqrt(eigenval), k_list, k_list) %*% t(eigenvec),
-                  eigenvec, eigenval, k_list)
-    A.MBB1 <- Map(function(K, A, I) 
-                  if (K > 1) A else matrix(sqrt(solve(I))), 
-                  k_list, A.MBB, I)
-    
-    if (!user_weighting){
       
-    switch(modelweights, 
-           
-     HIER = { # Begin HIER
-        
-        A.MBB2                <- Map(function(W, A) 
-                                     solve(sqrt(W)) %*% A %*% solve(sqrt(W)),
-                                     W.r, A.MBB1) 
-        sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
-                                     t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                     X, W.r, A.MBB2, sigma.hat.r)
-      }, # End HIER
+      switch(modelweights, 
+             HIER = {
+               # Inside Matrix = E_j^0.5 * ImH_j *E * t(ImH_j) * E_j^0.5
+               # In this case, the formula can be simplified to 
+               # Inside Matrix = E_j^0.5 * ImH_jj * E_j^1.5
+               InsideMatrx_list <-   Map(
+                 function (W_E_j, ImH_jj) {
+                   sqrt(W_E_j) %*% ImH_jj %*% (W_E_j^1.5)
+                 },
+                 Working_Matrx_E_j, ImHii)
+               
+               eigenres_list <- lapply(InsideMatrx_list, function(x) eigen(x))
+               eigenval_list <- lapply(eigenres_list, function(x) x$values)
+               eigenvec_list <- lapply(eigenres_list, function(x) x$vectors)
+               
+               A.MBB  <- Map(function (eigenvec, eigenval, k, W_E_j) {
+                                eigenval_InvSqrt <- ifelse(eigenval< 10^-10, 0, 1/sqrt(eigenval)) # Pseudo_Inverse
+                                sqrt(W_E_j) %*% eigenvec %*% diag(eigenval_InvSqrt, k, k) %*% t(eigenvec) %*%sqrt(W_E_j) # Pseudo_Inverse
+                             },
+                             eigenvec_list, 
+                             eigenval_list, 
+                             k_list,
+                             Working_Matrx_E_j)
+               
+             },
+             
+             CORR = {
+               # In this case, the formula can be simplified to 
+               # A_MBB =  ImH_jj ^ (-0.5)
+               
+               eigenres_list <- lapply(ImHii, function(x) eigen(x))
+               eigenval_list <- lapply(eigenres_list, function(x) x$values)
+               eigenvec_list <- lapply(eigenres_list, function(x) x$vectors)
+               
+               A.MBB  <- Map(function (eigenvec, eigenval, k, W_E_j) {
+                               eigenval_InvSqrt <- ifelse(eigenval< 10^-10, 0, 1/sqrt(eigenval)) # Pseudo_Inverse
+                               eigenvec %*% diag(eigenval_InvSqrt, k, k) %*% t(eigenvec) # Pseudo_Inverse
+                            },
+                            eigenvec_list, 
+                            eigenval_list, 
+                            k_list,
+                            Working_Matrx_E_j)
+             })
       
-      CORR = { # Begin CORR
-        
-        A.MBB2                <- A.MBB1
-        sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
-                                     t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                     X, W.r, A.MBB2, sigma.hat.r)
-      } # End CORR
-           
-    ) 
-    
+      
     } else { # Begin userweights
-        
-        A.MBB2                <- Map(function(V, A) 
-                                     V %*% A,
-                                     v.j.sqrt, A.MBB1) 
-        sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
-                                     t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
-                                     X, W.r, A.MBB2, sigma.hat.r)
-      } # End userweights
+      
+      V.big        <- diag(c(1), dim(Xreg)[1], dim(Xreg)[1]) %*% 
+        diag(data.full$avg.var.eff.size)
+      v.j          <- by(data.full$avg.var.eff.size, data.full$study, 
+                         function(x) diag(x, nrow = length(x)))
+      v.j.sqrt_list     <- lapply(v.j, function (x) sqrt(x))
+      
+      Working_Matrx_E_j <- v.j
+      Working_Matrx_E <- V.big
+      
+      InsideMatrx_list <-   Map(
+        function (ImH_j) {
+           ImH_j %*% Working_Matrx_E %*% t(ImH_j)
+        },
+        ImHj)
+      
+      eigenres_list <- lapply(InsideMatrx_list, function(x) eigen(x))
+      eigenval_list <- lapply(eigenres_list, function(x) x$values)
+      eigenvec_list <- lapply(eigenres_list, function(x) x$vectors)
+      
+      A.MBB  <- Map(function (eigenvec, eigenval, k, v.j.sqrt) {
+                      eigenval_InvSqrt <- ifelse(eigenval< 10^-10, 0, 1/sqrt(eigenval)) # Pseudo_Inverse
+                      v.j.sqrt %*% eigenvec %*% diag(eigenval_InvSqrt, k, k) %*% t(eigenvec)  # Pseudo_Inverse
+                    },
+                    eigenvec_list, 
+                    eigenval_list, 
+                    k_list,
+                    v.j.sqrt_list)
+      
+      
+    } # End userweights
+    
+    sumXWA.MBBeeA.MBBWX.r <- Map(function(X,W,A,S) 
+      t(X) %*% W %*% A %*% S %*% A %*% W %*%X, 
+      X, W.r, A.MBB, sigma.hat.r)
+    
+    
     
     sumXWA.MBBeeA.MBBWX.r <- Reduce("+", sumXWA.MBBeeA.MBBWX.r) 
     giTemp                <- Map(function(I, A, W, X, Q)
                                  t(I) %*% A %*% W %*% X %*% Q, 
-                                 ImHj, A.MBB2, W.r, X, Q.list)
+                                 ImHj, A.MBB, W.r, X, Q.list)
 
    
 
@@ -440,14 +549,14 @@ robu     <- function(formula, data, studynum,var.eff.size, userweights,
     VR.r    <- VR.MBB1
     SE      <- sqrt(diag(VR.r))
     t       <- b.r / SE
-    prob    <- 2 * (1 - pt(abs(t), df = dfs)) 
-    CI.L    <- b.r - qt(.975, dfs) * SE
-    CI.U    <- b.r + qt(.975, dfs) * SE
+    prob    <- 2 * (1 - stats::pt(abs(t), df = dfs)) 
+    CI.L    <- b.r - stats::qt(.975, dfs) * SE
+    CI.U    <- b.r + stats::qt(.975, dfs) * SE
     
   } # End small = TRUE
         
     reg_table           <- data.frame(cbind(b.r, SE, t, dfs, prob, CI.L, CI.U))
-    names(X.full)[2]    <- "intercept"
+    #names(X.full)[2]    <- "intercept"
     labels              <- c(colnames(X.full[2:length(X.full)]))
     sig                 <- ifelse(prob < .01, "***", 
                            ifelse(prob > .01 & prob < .05, "**",
