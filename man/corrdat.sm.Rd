@@ -4,8 +4,10 @@
 \name{corrdat.sm}
 \alias{corrdat.sm}
 \title{Data for Fitting Correlated Effects Model With Small-Sample Corrections}
-\format{A dataframe containing 300 effect sizes from 28 studies used in
-Tipton (2013).}
+\format{
+A dataframe containing 300 effect sizes from 28 studies used in
+Tipton (2013).
+}
 \source{
 Elizabeth Tipton
 }

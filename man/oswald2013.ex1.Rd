@@ -4,7 +4,8 @@
 \name{oswald2013.ex1}
 \alias{oswald2013.ex1}
 \title{IAT Criterion-Related Correlations}
-\format{A dataframe containing 32 effect sizes from 9 studies.
+\format{
+A dataframe containing 32 effect sizes from 9 studies.
 
 \tabular{rlll}{ [,1] \tab Study \tab Factor \cr [,2] \tab Crit.Domain \tab
 Factor \cr [,3] \tab IAT.ID \tab Integer \cr [,4] \tab IAT.Focus \tab Factor
@@ -12,7 +13,8 @@ Factor \cr [,3] \tab IAT.ID \tab Integer \cr [,4] \tab IAT.Focus \tab Factor
 [,7] \tab Scoring \tab Factor \cr [,8] \tab Target \tab Factor \cr [,9] \tab
 Type \tab Factor \cr [,10] \tab Sample.ID \tab Integer \cr [,11] \tab N \tab
 Integer \cr [,12] \tab R \tab Numeric \cr [,13] \tab effect.size \tab
-Numeric \cr [,14] \tab var.eff.size \tab Numeric }}
+Numeric \cr [,14] \tab var.eff.size \tab Numeric }
+}
 \source{
 Oswald FL, Mitchell G, Blanton H, Jaccard J, Tetlock PE (2013)
 Predicting ethnic and racial discrimination: a meta-analysis of IAT

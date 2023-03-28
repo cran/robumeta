@@ -4,8 +4,10 @@
 \name{hierdat}
 \alias{hierdat}
 \title{Data for Fitting Hierarchical Effects Model}
-\format{A dataframe containing 68 effect sizes from 15 studies used in
-Tanner- Smith and Tipton (2013).}
+\format{
+A dataframe containing 68 effect sizes from 15 studies used in
+Tanner- Smith and Tipton (2013).
+}
 \source{
 https://my.vanderbilt.edu/emilytannersmith/training-materials/
 }

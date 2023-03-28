@@ -1,8 +1,8 @@
 Package: robumeta
 Type: Package
 Title: Robust Variance Meta-Regression
-Version: 2.0
-Date: 2017-05-29
+Version: 2.1
+Date: 2023-03-29
 Authors@R: c(
  person("Zachary","Fisher", email = "fish.zachary@gmail.com", role = c("aut", "cre")),
  person("Elizabeth", "Tipton", role = "aut"),
@@ -14,13 +14,13 @@ URL: https://github.com/zackfisher/robumeta
 BugReports: https://github.com/zackfisher/robumeta/issues
 License: GPL-2
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 7.2.2
 VignetteBuilder: R.rsp
 NeedsCompilation: no
-Packaged: 2017-05-29 20:07:55 UTC; macuser
+Packaged: 2023-03-28 01:44:22 UTC; zff100
 Author: Zachary Fisher [aut, cre],
   Elizabeth Tipton [aut],
   Hou Zhipeng [aut]
 Maintainer: Zachary Fisher <fish.zachary@gmail.com>
 Repository: CRAN
-Date/Publication: 2017-05-29 21:26:29 UTC
+Date/Publication: 2023-03-28 03:00:02 UTC

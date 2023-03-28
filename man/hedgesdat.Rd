@@ -4,7 +4,9 @@
 \name{hedgesdat}
 \alias{hedgesdat}
 \title{hedgesdat}
-\format{A dataframe containing 179 effect sizes from 66 different studies}
+\format{
+A dataframe containing 179 effect sizes from 66 different studies
+}
 \source{
 Hedges, Tipton, and Johnson (2010)
 }

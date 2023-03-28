@@ -4,8 +4,10 @@
 \name{corrdat}
 \alias{corrdat}
 \title{Data for Fitting Correlated Effects Model}
-\format{A dataframe containing 172 effect sizes from 39 studies used in
-Tanner- Smith and Tipton (2013).}
+\format{
+A dataframe containing 172 effect sizes from 39 studies used in
+Tanner- Smith and Tipton (2013).
+}
 \source{
 https://my.vanderbilt.edu/emilytannersmith/training-materials/
 }

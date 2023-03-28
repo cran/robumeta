@@ -7,8 +7,17 @@
 \alias{USER}
 \title{Fitting Robust Variance Meta-Regression Models}
 \usage{
-robu(formula, data, studynum, var.eff.size, userweights,
-  modelweights = c("CORR", "HIER"), rho = 0.8, small = TRUE, ...)
+robu(
+  formula,
+  data,
+  studynum,
+  var.eff.size,
+  userweights,
+  modelweights = c("CORR", "HIER"),
+  rho = 0.8,
+  small = TRUE,
+  ...
+)
 }
 \arguments{
 \item{formula}{An object of class \code{"formula"}. A typical
